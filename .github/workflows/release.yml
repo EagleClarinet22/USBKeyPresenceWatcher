@@ -46,6 +46,6 @@ jobs:
           body: ${{ steps.changelog.outputs.entry }}
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
