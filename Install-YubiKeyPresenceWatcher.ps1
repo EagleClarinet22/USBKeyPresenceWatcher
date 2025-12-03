@@ -14,53 +14,28 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ---------- Validate running as admin ----------
-function Test-RunningAsAdmin {
-    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal       = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
-    $isAdmin         = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+function Test-AdminElevation {
+    $current = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($current)
 
-    if ($isAdmin) {
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         return
     }
 
-    Write-Warning "This script is not running with elevated (Administrator) privileges."
-    Write-Warning "Attempting to relaunch with elevation..."
+    Write-Warning "Not running as administrator. Attempting elevation..."
 
-    if (-not $PSCommandPath) {
-        throw "Cannot self-elevate because PSCommandPath is not available. Please rerun this script in an elevated PowerShell session."
+    # Capture exact user command line including parameters
+    $command = $MyInvocation.Line
+    if (-not $command) {
+        throw "Unable to retrieve invocation line for elevation."
     }
 
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    # Relaunch with elevation
+    Start-Process -FilePath "powershell.exe" -ArgumentList $command -Verb RunAs
 
-    foreach ($key in $PSBoundParameters.Keys) {
-        if ($key -eq 'Help') { continue }
-
-        $value = $PSBoundParameters[$key]
-
-        if ($value -is [System.Management.Automation.SwitchParameter]) {
-            if ($value.IsPresent) {
-                $argList += "-$key"
-            }
-        } else {
-            $escaped = $value.ToString().Replace('"', '\"')
-            $argList += "-$key"
-            $argList += "`"$escaped`""
-        }
-    }
-
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName  = "powershell.exe"
-    $psi.Arguments = $argList -join ' '
-    $psi.Verb      = "runas"
-
-    try {
-        [Diagnostics.Process]::Start($psi) | Out-Null
-        Write-Host "Relaunched elevated. Exiting non-elevated instance..." -ForegroundColor Yellow
-        exit
-    } catch {
-        throw "Elevation failed: $($_.Exception.Message). Please rerun this script as Administrator."
-    }
+    exit
 }
+
 
 # ---------- Help handler (can be shown without admin) ----------
 if ($Help) {
@@ -93,7 +68,7 @@ if ($Help) {
     return
 }
 
-Test-RunningAsAdmin
+Test-AdminElevation
 
 Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColor Cyan
 
