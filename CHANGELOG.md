@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.2.1] - 2025-12-03
+- **Added formatting and made pretty** - updated Installer script to run more smoothly and provide more opportunities to abort install.
+
 ## [1.0.2] - 2025-12-03
 _minor tweak: Added support file distribution and automatic cleanup when uninstalling._
 
