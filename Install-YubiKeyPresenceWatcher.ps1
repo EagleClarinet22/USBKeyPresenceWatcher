@@ -191,17 +191,17 @@ function Get-YubiPrefixFromUser {
     }
 
     # Manual entry fallback or chosen 'M'
-    while (-not $yubiPrefix) {
-        Write-Host ""
-        Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor Yellow
-        $input = Read-Host "VID/PID prefix"
-
-        if ($input -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
-            $yubiPrefix = $input.ToUpper()
-        } else {
-            Write-Warning "Invalid format. Expected something like: VID_1050&PID_0407"
+        while (-not $yubiPrefix) {
+            Write-Host ""
+            Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor Yellow
+            $userInput = Read-Host "VID/PID prefix"
+    
+            if ($userInput -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
+                $yubiPrefix = $userInput.ToUpper()
+            } else {
+                Write-Warning "Invalid format. Expected something like: VID_1050&PID_0407"
+            }
         }
-    }
 
     return $yubiPrefix
 }
