@@ -2,42 +2,189 @@
 param(
     [string]$InstallDir = "C:\Scripts\YubiKey",
     [string]$TaskName   = "YubiKey Presence Watcher",
-    [switch]$Force
+    [string]$YubiPrefix,
+    [switch]$Force,
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
 
+# ---------- Help handler ----------
+if ($Help) {
+    Write-Host "Install-YubiKeyPresenceWatcher.ps1" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Installs the YubiKey Presence Watcher:"
+    Write-Host " - Copies the script and icon to an install folder"
+    Write-Host " - Prompts for (or uses) a YubiKey/USB VID/PID prefix"
+    Write-Host " - Patches the installed script to use that VID/PID"
+    Write-Host " - Hardens ACLs on the install folder"
+    Write-Host " - Creates the EventLog source (if possible)"
+    Write-Host " - Registers a Scheduled Task from the XML template"
+    Write-Host ""
+    Write-Host "Parameters:"
+    Write-Host "  -InstallDir <path>      Target install folder (default: C:\Scripts\YubiKey)"
+    Write-Host "  -TaskName <name>        Scheduled Task name (default: 'YubiKey Presence Watcher')"
+    Write-Host "  -YubiPrefix <VID/PID>   Optional. Skip device selection and use this prefix directly."
+    Write-Host "                          Example: -YubiPrefix 'VID_1050&PID_0407'"
+    Write-Host "  -Force                  Overwrite existing files and re-register the task if present."
+    Write-Host "  -Help                   Show this help text and exit."
+    Write-Host ""
+    Write-Host "Examples:" -ForegroundColor Yellow
+    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1"
+    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKey' -Force"
+    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'"
+    Write-Host ""
+    return
+}
+
 Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColor Cyan
 
-# Resolve source directory (where this installer lives)
+# ---------- Resolve source directory (where this installer lives) ----------
 $SourceDir = Split-Path -Parent $PSCommandPath
 
-# Files expected in repo
+# Files expected in the repo/source directory
 $scriptFile   = "YubiKeyPresenceLock.ps1"
 $iconFile     = "lock_toast_64.png"
 $taskXmlFile  = "Task-YubiKeyPresenceLock.xml"
 
 foreach ($f in @($scriptFile, $iconFile, $taskXmlFile)) {
-    if (-not (Test-Path (Join-Path $SourceDir $f))) {
-        throw "Required file '$f' not found in $SourceDir"
+    $fullPath = Join-Path $SourceDir $f
+    if (-not (Test-Path $fullPath)) {
+        throw "Required file '$f' not found in source directory: $SourceDir"
     }
 }
 
-# Create install directory
+# ---------- Helper: ask user which device to monitor & derive VID/PID ----------
+function Get-YubiPrefixFromUser {
+    Write-Host ""
+    Write-Host "Detecting USB/PnP devices to choose from..." -ForegroundColor Cyan
+
+    $yubiPrefix = $null
+
+    # Try to import PnpDevice to enumerate hardware
+    $pnpModuleLoaded = $false
+    try {
+        Import-Module PnpDevice -ErrorAction Stop
+        $pnpModuleLoaded = $true
+    } catch {
+        Write-Warning "Could not import PnpDevice module. You will need to enter the VID_XXXX&PID_YYYY prefix manually."
+    }
+
+    if ($pnpModuleLoaded) {
+        try {
+            $devices = Get-PnpDevice -PresentOnly |
+                Where-Object { $_.InstanceId -match 'VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}' } |
+                Sort-Object FriendlyName, InstanceId
+
+            if ($devices -and $devices.Count -gt 0) {
+                Write-Host ""
+                Write-Host "Select the USB device to monitor for presence (likely your YubiKey or security key):" -ForegroundColor Yellow
+                Write-Host ""
+
+                for ($i = 0; $i -lt $devices.Count; $i++) {
+                    $dev   = $devices[$i]
+                    $label = if ($dev.FriendlyName) { $dev.FriendlyName } else { $dev.Name }
+
+                    Write-Host ("[{0}] {1}" -f $i, $label)
+                    Write-Host ("     {0}" -f $dev.InstanceId)
+                    Write-Host ""
+                }
+
+                while ($true) {
+                    $choice = Read-Host "Enter the number of the device to use, or 'M' to enter VID/PID manually"
+
+                    if ($choice -match '^[Mm]$') {
+                        break  # go to manual entry
+                    }
+
+                    if ($choice -match '^\d+$') {
+                        $idx = [int]$choice
+                        if ($idx -ge 0 -and $idx -lt $devices.Count) {
+                            $selected = $devices[$idx]
+                            $match = [regex]::Match($selected.InstanceId, 'VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}')
+                            if ($match.Success) {
+                                $yubiPrefix = $match.Value.ToUpper()
+                                Write-Host "Selected device: $($selected.FriendlyName)" -ForegroundColor Green
+                                Write-Host "Using VID/PID prefix: $yubiPrefix" -ForegroundColor Green
+                                break
+                            } else {
+                                Write-Warning "Could not extract VID/PID from that device. Try another index or use manual mode."
+                            }
+                        } else {
+                            Write-Warning "Invalid index. Try again."
+                        }
+                    } else {
+                        Write-Warning "Invalid input. Enter an index number or 'M'."
+                    }
+                }
+            } else {
+                Write-Warning "No devices with VID_XXXX&PID_YYYY found. Falling back to manual entry."
+            }
+        } catch {
+            Write-Warning "Error while listing devices: $($_.Exception.Message). Falling back to manual entry."
+        }
+    }
+
+    # Manual entry fallback or chosen 'M'
+    while (-not $yubiPrefix) {
+        Write-Host ""
+        Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor Yellow
+        $input = Read-Host "VID/PID prefix"
+
+        if ($input -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
+            $yubiPrefix = $input.ToUpper()
+        } else {
+            Write-Warning "Invalid format. Expected something like: VID_1050&PID_0407"
+        }
+    }
+
+    return $yubiPrefix
+}
+
+# ---------- Resolve YubiPrefix (parameter or interactive) ----------
+if ($YubiPrefix) {
+    if ($YubiPrefix -notmatch '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
+        throw "Provided -YubiPrefix '$YubiPrefix' is invalid. Expected format like: VID_1050&PID_0407"
+    }
+    $selectedYubiPrefix = $YubiPrefix.ToUpper()
+    Write-Host ""
+    Write-Host "Using provided YubiPrefix: $selectedYubiPrefix" -ForegroundColor Green
+} else {
+    $selectedYubiPrefix = Get-YubiPrefixFromUser
+    Write-Host ""
+    Write-Host "Final selected YubiKey/device prefix: $selectedYubiPrefix" -ForegroundColor Green
+}
+
+# ---------- Create / validate install directory ----------
 if (-not (Test-Path $InstallDir)) {
     Write-Host "Creating directory $InstallDir"
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 } elseif (-not $Force) {
-    Write-Host "Directory $InstallDir already exists."
+    Write-Host "Directory $InstallDir already exists. Existing files may be overwritten."
 }
 
-# Copy files
-Write-Host "Copying files..."
+# ---------- Copy files into install directory ----------
+Write-Host "Copying files to $InstallDir..."
 Copy-Item (Join-Path $SourceDir $scriptFile)  -Destination $InstallDir -Force
 Copy-Item (Join-Path $SourceDir $iconFile)    -Destination $InstallDir -Force
 Copy-Item (Join-Path $SourceDir $taskXmlFile) -Destination $InstallDir -Force
 
-# Hardening ACLs on the directory
+# ---------- Patch ONLY the installed script with the selected VID/PID ----------
+$scriptDestPath = Join-Path $InstallDir $scriptFile
+$scriptContent  = Get-Content $scriptDestPath -Raw
+
+# We expect a line like: $yubiPrefix = "VID_1050&PID_0407"
+$pattern = '(\$yubiPrefix\s*=\s*")[^"]*(")'
+
+if ($scriptContent -match $pattern) {
+    $scriptContent = $scriptContent -replace $pattern, "`$1$selectedYubiPrefix`$2"
+    Set-Content -Path $scriptDestPath -Value $scriptContent -Encoding UTF8
+    Write-Host "Updated installed script with YubiKey/device prefix: $selectedYubiPrefix" -ForegroundColor Green
+} else {
+    Write-Warning "Could not find yubiPrefix assignment line to patch in the installed script. Check YubiKeyPresenceLock.ps1 format."
+}
+
+# ---------- Harden ACLs on the install directory ----------
 Write-Host "Hardening ACLs on $InstallDir..."
 
 $acl = New-Object System.Security.AccessControl.DirectorySecurity
@@ -46,7 +193,9 @@ $propagationFlags  = [System.Security.AccessControl.PropagationFlags]::None
 $accessControlType = [System.Security.AccessControl.AccessControlType]::Allow
 $rights            = [System.Security.AccessControl.FileSystemRights]::FullControl
 
-$currentUser = New-Object System.Security.Principal.NTAccount("$env:USERDOMAIN\$env:USERNAME")
+# Use DOMAIN\Username form for safety (DOMAIN may be machine name)
+$accountName = "$env:USERDOMAIN\$env:USERNAME"
+$currentUser = New-Object System.Security.Principal.NTAccount($accountName)
 $admins      = New-Object System.Security.Principal.NTAccount("Administrators")
 $system      = New-Object System.Security.Principal.NTAccount("SYSTEM")
 
@@ -58,51 +207,63 @@ foreach ($id in @($currentUser, $admins, $system)) {
 }
 
 Set-Acl -Path $InstallDir -AclObject $acl
-Write-Host "ACLs set: $($currentUser.Value), Administrators, SYSTEM have FullControl." -ForegroundColor Green
+Write-Host "ACLs set: $($currentUser.Value), Administrators, and SYSTEM have FullControl." -ForegroundColor Green
 
-# Ensure EventLog source exists
+# ---------- Ensure EventLog source exists ----------
 $eventSource  = "YubiKeyPresenceWatcher"
 $eventLogName = "Application"
 
 try {
     if (-not [System.Diagnostics.EventLog]::SourceExists($eventSource)) {
-        Write-Host "Creating EventLog source '$eventSource' (admin required)..."
+        Write-Host "Creating EventLog source '$eventSource' in '$eventLogName' (admin required)..." -ForegroundColor Yellow
         New-EventLog -LogName $eventLogName -Source $eventSource
     }
 } catch {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
 
-# ---- Register Scheduled Task from XML template ----
+# ---------- Register Scheduled Task from XML template ----------
 Write-Host "Registering scheduled task '$TaskName'..."
 
-$scriptPath = Join-Path $InstallDir $scriptFile
+$scriptPath = $scriptDestPath
 
 # Resolve username + SID
-$username = $env:USERNAME
-$userSid  = (New-Object System.Security.Principal.NTAccount($username)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+try {
+    $userNt  = New-Object System.Security.Principal.NTAccount($accountName)
+    $userSid = $userNt.Translate([System.Security.Principal.SecurityIdentifier]).Value
+} catch {
+    throw "Failed to resolve SID for user '$accountName': $($_.Exception.Message)"
+}
 
-# Load XML template
-$xmlTemplate = Get-Content (Join-Path $InstallDir $taskXmlFile) -Raw
+# Load XML template from installed location
+$xmlTemplatePath = Join-Path $InstallDir $taskXmlFile
+$xmlTemplate     = Get-Content $xmlTemplatePath -Raw
 
-# Replacement with proper XML escaping
+# Replacement with XML escaping for safety
 $xmlResolved = $xmlTemplate `
-    -replace "__SCRIPT_PATH__", [System.Security.SecurityElement]::Escape($scriptPath) `
-    -replace "__WORK_DIR__",    [System.Security.SecurityElement]::Escape($InstallDir) `
-    -replace "__USERNAME__",    [System.Security.SecurityElement]::Escape($username) `
-    -replace "__USERNAME_SID__", [System.Security.SecurityElement]::Escape($userSid)
+    -replace "__SCRIPT_PATH__",   [System.Security.SecurityElement]::Escape($scriptPath) `
+    -replace "__WORK_DIR__",      [System.Security.SecurityElement]::Escape($InstallDir) `
+    -replace "__USERNAME__",      [System.Security.SecurityElement]::Escape($accountName) `
+    -replace "__USERNAME_SID__",  [System.Security.SecurityElement]::Escape($userSid)
 
-# Delete any existing task first
+# Remove existing task if present
 try {
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
         Write-Host "Existing task '$TaskName' found. Removing..."
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
-} catch {}
+} catch {
+    Write-Warning "Failed checking/removing existing task '$TaskName': $($_.Exception.Message)"
+}
 
 # Register new task
-Register-ScheduledTask -TaskName $TaskName -Xml $xmlResolved -User $username -RunLevel Highest | Out-Null
+try {
+    Register-ScheduledTask -TaskName $TaskName -Xml $xmlResolved -User $accountName -RunLevel Highest | Out-Null
+    Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
+} catch {
+    Write-Warning "Failed to register scheduled task '$TaskName': $($_.Exception.Message)"
+    throw
+}
 
-Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
-
-Write-Host "Installation complete." -ForegroundColor Green
+Write-Host ""
+Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
