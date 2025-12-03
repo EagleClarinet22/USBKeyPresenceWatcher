@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 
 # ---------- Validate running as admin ----------
 function Test-AdminElevation {
-    # Check if already elevated
+    # Check if already admin
     $current = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($current)
 
@@ -23,23 +23,33 @@ function Test-AdminElevation {
         return
     }
 
-    Write-Warning "Not running as Administrator. Elevating..."
+    Write-Warning "Not running elevated. Restarting with administrator privileges..."
 
-    # Explicit Windows PowerShell 5.1 path
     $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-    # Capture exact command used to launch the script
-    $invocation = $MyInvocation.Line
-    if (-not $invocation) {
-        throw "Unable to capture the invocation line. Do not run this script from ISE or through pwsh.exe."
+    # Build argument list manually
+    $args = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+
+    foreach ($key in $PSBoundParameters.Keys) {
+        $value = $PSBoundParameters[$key]
+
+        if ($value -is [System.Management.Automation.SwitchParameter]) {
+            if ($value.IsPresent) {
+                $args += "-$key"
+            }
+        }
+        else {
+            $escaped = $value.ToString().Replace('"', '\"')
+            $args += "-$key"
+            $args += "`"$escaped`""
+        }
     }
 
-    # Relaunch elevated (no -NoExit)
-    Start-Process -FilePath $psExe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass", "-Command", $invocation
+    Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $args
 
-    # Stop the non-admin instance
     exit
 }
+
 
 
 
