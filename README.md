@@ -91,7 +91,16 @@ From the repo directory:
 .\Install-YubiKeyPresenceWatcher.ps1
 ```
 
-You will be shown a list of detected USB devices containing a `VID_XXXX&PID_YYYY`.
+For guidance on installation:
+```powershell
+.\Install-YubiKeyPresenceWatcher.ps1 -Help
+```
+**or**
+```powershell
+.\Install-YubiKeyPresenceWatcher.ps1 --Help
+```
+
+Once the script is started, you will be shown a list of detected USB devices containing a `VID_XXXX&PID_YYYY`.
 
 Example:
 
