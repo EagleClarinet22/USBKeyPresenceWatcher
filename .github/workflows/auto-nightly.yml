@@ -1,0 +1,63 @@
+name: Nightly Auto Release
+
+on:
+  schedule:
+    # Runs every night at 1:00 AM UTC — adjust as needed
+    - cron: "0 1 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get last commit info
+        id: commitinfo
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          DATE=$(date +"%Y-%m-%d")
+          TAG="nightly-${DATE}"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
+      - name: Check if nightly tag already exists
+        id: checktag
+        run: |
+          if git rev-parse "${{ steps.commitinfo.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if nightly already published today
+        if: ${{ steps.checktag.outputs.exists == 'true' }}
+        run: |
+          echo "Nightly release already exists for today. Exiting."
+          exit 0
+
+      - name: Create nightly tag
+        run: |
+          git tag ${{ steps.commitinfo.outputs.tag }}
+          git push origin ${{ steps.commitinfo.outputs.tag }}
+
+      - name: Create Nightly Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.commitinfo.outputs.tag }}
+          name: "Nightly Build - ${{ steps.commitinfo.outputs.tag }}"
+          body: |
+            Nightly automated build.
+
+            Commit: `${{ steps.commitinfo.outputs.sha }}`
+            Date: `${{ steps.commitinfo.outputs.date }}`
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
