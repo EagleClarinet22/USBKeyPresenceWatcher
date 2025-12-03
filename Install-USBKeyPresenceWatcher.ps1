@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 
 # Display WhatIf banner if enabled
 if ($WhatIf) {
-    Write-Host "[Simulation Mode] -WhatIf is enabled. No system changes will be made." -ForegroundColor Yellow
+    Write-Host "[Simulation Mode] -WhatIf is enabled. No system changes will be made." -ForegroundColor DarkYellow
 }
 
 # Helper: unified ShouldProcess emulator for safe state-changing operations
@@ -156,7 +156,7 @@ function Get-YubiPrefixFromUser {
 
             if ($devices -and $devices.Count -gt 0) {
                 Write-Host ""
-                Write-Host "Select the USB device to monitor for presence (likely your USB security key):" -ForegroundColor Yellow
+                Write-Host "Select the USB device to monitor for presence (likely your USB security key):" -ForegroundColor DarkCyan
                 Write-Host ""
 
                 for ($i = 0; $i -lt $devices.Count; $i++) {
@@ -182,9 +182,18 @@ function Get-YubiPrefixFromUser {
                             $match = [regex]::Match($selected.InstanceId, 'VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}')
                             if ($match.Success) {
                                 $yubiPrefix = $match.Value.ToUpper()
-                                Write-Host "Selected device: $($selected.FriendlyName)" -ForegroundColor Green
-                                Write-Host "Using VID/PID prefix: $yubiPrefix" -ForegroundColor Green
-                                break
+                                Write-Host "Selected device: $($selected.FriendlyName)" -ForegroundColor DarkGreen
+                                Write-Host "Using VID/PID prefix: $yubiPrefix" -ForegroundColor DarkGreen
+                                
+                                # Ask user to confirm the selection
+                                Write-Host ""
+                                $confirm = Read-Host "Is this correct? (Y/N)"
+                                if ($confirm -match '^[Yy]$') {
+                                    break  # Confirmed, exit loop
+                                } else {
+                                    Write-Host "Selection cancelled. Please choose again." -ForegroundColor DarkYellow
+                                    $yubiPrefix = $null  # Reset so loop continues
+                                }
                             } else {
                                 Write-Warning "Could not extract VID/PID from that device. Try another index or use manual mode."
                             }
@@ -206,7 +215,7 @@ function Get-YubiPrefixFromUser {
     # Manual entry fallback or chosen 'M'
         while (-not $yubiPrefix) {
             Write-Host ""
-            Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor Yellow
+            Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor DarkYellow
             $userInput = Read-Host "VID/PID prefix"
     
             if ($userInput -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
@@ -234,31 +243,54 @@ if ($YubiPrefix) {
 }
 
 # ---------- Create / validate install directory ----------
+Write-Host "Checking for install directory: $InstallDir" -ForegroundColor DarkCyan
 if (-not (Test-Path $InstallDir)) {
-    Write-Host "Creating directory $InstallDir"
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    Write-Host "No existing install directory found. Creating directory $InstallDir..." -ForegroundColor DarkCyan
+    if (ShouldPerform("Install directory '$InstallDir'", "Create")) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
 } elseif (-not $Force) {
-    Write-Host "Directory $InstallDir already exists. Existing files may be overwritten."
+    Write-Host "Directory $InstallDir already exists." -ForegroundColor Yellow
+    Write-Host ""
+    $overwrite = Read-Host "Do you want to overwrite existing files? (Y/N)"
+    if ($overwrite -notmatch '^[Yy]$') {
+        Write-Host "Installation cancelled." -ForegroundColor Yellow
+        exit 0
+    }
 }
 
 # ---------- Copy files into install directory ----------
-Write-Host "Copying files to $InstallDir..."
-if (ShouldPerform("Files in $InstallDir", "Copy")) {
-    # Copy required files
-    Copy-Item (Join-Path $SourceDir $scriptFile)          -Destination $InstallDir -Force
-    Copy-Item (Join-Path $SourceDir $iconFile)            -Destination $InstallDir -Force
-    Copy-Item (Join-Path $SourceDir $templateTaskXmlFile) -Destination $InstallDir -Force
-    
-    # Copy optional files (for documentation and uninstallation)
-    foreach ($optFile in $optionalFiles) {
-        $srcPath = Join-Path $SourceDir $optFile
-        if (Test-Path $srcPath) {
+Write-Host "Copying files to $InstallDir..." -ForegroundColor DarkCyan
+
+# Copy files individually and use ShouldPerform per-file so -WhatIf shows each operation
+# (avoid a single outer ShouldPerform so each file emits its own WhatIf line)
+
+# Copy required files
+$reqFiles = @(
+    @{ src = Join-Path $SourceDir $scriptFile; dest = $InstallDir },
+    @{ src = Join-Path $SourceDir $iconFile; dest = $InstallDir },
+    @{ src = Join-Path $SourceDir $templateTaskXmlFile; dest = $InstallDir }
+)
+
+foreach ($f in $reqFiles) {
+    $fileName = Split-Path $f.src -Leaf
+    if (ShouldPerform("Copy '$fileName' to '$InstallDir'", "Copy")) {
+        Copy-Item $f.src -Destination $f.dest -Force
+    }
+}
+
+# Copy optional files (for documentation and uninstallation)
+foreach ($optFile in $optionalFiles) {
+    $srcPath = Join-Path $SourceDir $optFile
+    if (Test-Path $srcPath) {
+        if (ShouldPerform("Copy '$optFile' to '$InstallDir'", "Copy")) {
             Copy-Item $srcPath -Destination $InstallDir -Force
         }
     }
 }
 
 # ---------- Patch ONLY the installed script with the selected VID/PID ----------
+Write-Host "Patching installed script with selected USB Key/device prefix: $selectedYubiPrefix..." -ForegroundColor DarkCyan
 $scriptDestPath = Join-Path $InstallDir $scriptFile
 
 # Read script only in non-WhatIf mode; in WhatIf mode we skip the actual file ops
@@ -280,7 +312,7 @@ if (-not ($WhatIf -or $WhatIfPreference)) {
 }
 
 # ---------- Harden ACLs on the install directory ----------
-Write-Host "Hardening ACLs on $InstallDir..."
+Write-Host "Hardening ACLs on $InstallDir..." -ForegroundColor DarkCyan
 
 if (ShouldPerform("Directory ACL on $InstallDir", "Set")) {
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
@@ -313,7 +345,7 @@ $eventLogName = "Application"
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 try {
     if (-not [System.Diagnostics.EventLog]::SourceExists($eventSource)) {
-        Write-Host "Creating EventLog source '$eventSource' in '$eventLogName' (admin required)..." -ForegroundColor Yellow
+        Write-Host "Creating EventLog source '$eventSource' in '$eventLogName' (admin required)..." -ForegroundColor DarkCyan
         if (ShouldPerform("EventLog source '$eventSource'", "Create in $eventLogName")) {
             New-EventLog -LogName $eventLogName -Source $eventSource
         }
@@ -324,7 +356,20 @@ try {
 # PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 # ---------- Build resolved task XML from template ----------
+Write-Host "Generating scheduled task XML from template..." -ForegroundColor DarkCyan
+# Prefer the template in the install directory (written during install),
+# but if it's not present (for example during -WhatIf simulation),
+# fall back to the repository/source template so Get-Content doesn't fail.
 $templateXmlPath = Join-Path $InstallDir $templateTaskXmlFile
+if (-not (Test-Path $templateXmlPath)) {
+    $fallback = Join-Path $SourceDir $templateTaskXmlFile
+    if (Test-Path $fallback) {
+        Write-Host "Template not found in install dir; using repo template: $fallback" -ForegroundColor Yellow
+        $templateXmlPath = $fallback
+    } else {
+        throw "Template task XML '$templateTaskXmlFile' not found in install dir or source directory."
+    }
+}
 $xmlContent      = Get-Content $templateXmlPath -Raw
 
 # Values to plug into the XML
@@ -370,22 +415,22 @@ if ($DebugXml) {
 }
 
 # ---------- Register Scheduled Task using SCHTASKS.EXE ----------
-Write-Host "Registering scheduled task '$TaskName'..."
-
+Write-Host "Registering scheduled task '$TaskName'..." -ForegroundColor DarkCyan
+# Use ShouldPerform for any state-changing operations so -WhatIf simulates them
+# and the script does not print misleading unconditional messages.
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
-# Remove existing task if present
 try {
     schtasks.exe /query /tn "$TaskName" > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "Existing task '$TaskName' found. Removing..."
         if (ShouldPerform("Scheduled task '$TaskName'", "Delete existing")) {
+            Write-Host "Existing task '$TaskName' found. Removing..."
             schtasks.exe /delete /tn "$TaskName" /f > $null
         }
     }
 } catch {}
 
-Write-Host "Importing task from generated XML..."
 if (ShouldPerform("Scheduled task '$TaskName'", "Create from XML")) {
+    Write-Host "Registering scheduled task '$TaskName' from XML..."
     schtasks.exe /create /tn "$TaskName" /xml "$taskXmlResolvedPath" /f | Out-Null
 
     if ($LASTEXITCODE -ne 0) {
@@ -397,8 +442,11 @@ if (ShouldPerform("Scheduled task '$TaskName'", "Create from XML")) {
 # PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 Write-Host ""
-Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
-
+if ($WhatIf -or $WhatIfPreference) {
+    Write-Host "[Simulation Mode] Installation successfully simulated. No changes were made." -ForegroundColor Green
+} else {
+    Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
+}
 if ($Host.Name -eq "ConsoleHost") {
     Write-Host ""
     Read-Host "Press Enter to exit..."
