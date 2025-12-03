@@ -10,7 +10,56 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ---------- Help handler ----------
+# ---------- Validate running as admin ----------
+function Test-RunningAsAdmin {
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal       = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+    $isAdmin         = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    if ($isAdmin) {
+        return
+    }
+
+    Write-Warning "This script is not running with elevated (Administrator) privileges."
+    Write-Warning "Attempting to relaunch with elevation..."
+
+    if (-not $PSCommandPath) {
+        throw "Cannot self-elevate because PSCommandPath is not available. Please rerun this script in an elevated PowerShell session."
+    }
+
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+
+    foreach ($key in $PSBoundParameters.Keys) {
+        if ($key -eq 'Help') { continue }
+
+        $value = $PSBoundParameters[$key]
+
+        if ($value -is [System.Management.Automation.SwitchParameter]) {
+            if ($value.IsPresent) {
+                $argList += "-$key"
+            }
+        } else {
+            $escaped = $value.ToString().Replace('"', '\"')
+            $argList += "-$key"
+            $argList += "`"$escaped`""
+        }
+    }
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName  = "powershell.exe"
+    $psi.Arguments = $argList -join ' '
+    $psi.Verb      = "runas"
+
+    try {
+        [Diagnostics.Process]::Start($psi) | Out-Null
+        Write-Host "Relaunched elevated. Exiting non-elevated instance..." -ForegroundColor Yellow
+        exit
+    } catch {
+        throw "Elevation failed: $($_.Exception.Message). Please rerun this script as Administrator."
+    }
+}
+
+# ---------- Help handler (can be shown without admin) ----------
 if ($Help) {
     Write-Host "Install-YubiKeyPresenceWatcher.ps1" -ForegroundColor Cyan
     Write-Host ""
@@ -40,6 +89,8 @@ if ($Help) {
     Write-Host ""
     return
 }
+
+Test-RunningAsAdmin
 
 Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColor Cyan
 
