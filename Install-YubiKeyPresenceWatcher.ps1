@@ -4,6 +4,7 @@ param(
     [string]$TaskName   = "YubiKey Presence Watcher",
     [string]$YubiPrefix,
     [switch]$Force,
+    [switch]$DebugXml,
     [switch]$Help
 )
 
@@ -19,7 +20,8 @@ if ($Help) {
     Write-Host " - Patches the installed script to use that VID/PID"
     Write-Host " - Hardens ACLs on the install folder"
     Write-Host " - Creates the EventLog source (if possible)"
-    Write-Host " - Registers a Scheduled Task from the XML template"
+    Write-Host " - Generates Task-YubiKeyPresenceLock.xml from Template-YubiKeyPresenceLock.xml"
+    Write-Host " - Registers a Scheduled Task from the generated Task XML"
     Write-Host ""
     Write-Host "Parameters:"
     Write-Host "  -InstallDir <path>      Target install folder (default: C:\Scripts\YubiKey)"
@@ -27,12 +29,14 @@ if ($Help) {
     Write-Host "  -YubiPrefix <VID/PID>   Optional. Skip device selection and use this prefix directly."
     Write-Host "                          Example: -YubiPrefix 'VID_1050&PID_0407'"
     Write-Host "  -Force                  Overwrite existing files and re-register the task if present."
+    Write-Host "  -DebugXml               Write DEBUG-Task-Resolved.xml with the resolved XML."
     Write-Host "  -Help                   Show this help text and exit."
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
     Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1"
     Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKey' -Force"
     Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'"
+    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -DebugXml"
     Write-Host ""
     return
 }
@@ -41,7 +45,7 @@ Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColo
 
 # ---------- Resolve source directory (where this installer lives) ----------
 $SourceDir = Split-Path -Parent $PSCommandPath
-$ResolvedInstallDir = Resolve-Path $Install-Dir -ErrorAction SilentlyContinue
+$ResolvedInstallDir = Resolve-Path $InstallDir -ErrorAction SilentlyContinue
 
 if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
     throw "ERROR: Installer cannot run from the same directory it installs into. 
@@ -49,11 +53,11 @@ if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
 }
 
 # Files expected in the repo/source directory
-$scriptFile   = "YubiKeyPresenceLock.ps1"
-$iconFile     = "lock_toast_64.png"
-$taskXmlFile  = "Task-YubiKeyPresenceLock.xml"
+$scriptFile          = "YubiKeyPresenceLock.ps1"
+$iconFile            = "lock_toast_64.png"
+$templateTaskXmlFile = "Template-YubiKeyPresenceLock.xml"
 
-foreach ($f in @($scriptFile, $iconFile, $taskXmlFile)) {
+foreach ($f in @($scriptFile, $iconFile, $templateTaskXmlFile)) {
     $fullPath = Join-Path $SourceDir $f
     if (-not (Test-Path $fullPath)) {
         throw "Required file '$f' not found in source directory: $SourceDir"
@@ -171,9 +175,9 @@ if (-not (Test-Path $InstallDir)) {
 
 # ---------- Copy files into install directory ----------
 Write-Host "Copying files to $InstallDir..."
-Copy-Item (Join-Path $SourceDir $scriptFile)  -Destination $InstallDir -Force
-Copy-Item (Join-Path $SourceDir $iconFile)    -Destination $InstallDir -Force
-Copy-Item (Join-Path $SourceDir $taskXmlFile) -Destination $InstallDir -Force
+Copy-Item (Join-Path $SourceDir $scriptFile)          -Destination $InstallDir -Force
+Copy-Item (Join-Path $SourceDir $iconFile)            -Destination $InstallDir -Force
+Copy-Item (Join-Path $SourceDir $templateTaskXmlFile) -Destination $InstallDir -Force
 
 # ---------- Patch ONLY the installed script with the selected VID/PID ----------
 $scriptDestPath = Join-Path $InstallDir $scriptFile
@@ -228,12 +232,50 @@ try {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
 
+# ---------- Build resolved task XML from template ----------
+$templateXmlPath = Join-Path $InstallDir $templateTaskXmlFile
+$xmlContent      = Get-Content $templateXmlPath -Raw
+
+# Values to plug into the XML
+$scriptPath  = $scriptDestPath      # full path to YubiKeyPresenceLock.ps1 in the install dir
+$workDir     = $InstallDir
+$accountName = "$env:USERDOMAIN\$env:USERNAME"
+
+# Resolve SID for the current user
+try {
+    $userNt  = New-Object System.Security.Principal.NTAccount($accountName)
+    $userSid = $userNt.Translate([System.Security.Principal.SecurityIdentifier]).Value
+} catch {
+    throw "Failed to resolve SID for '$accountName': $($_.Exception.Message)"
+}
+
+# Escape values for XML safety
+$escapedScriptPath = [System.Security.SecurityElement]::Escape($scriptPath)
+$escapedWorkDir    = [System.Security.SecurityElement]::Escape($workDir)
+$escapedUser       = [System.Security.SecurityElement]::Escape($accountName)
+$escapedUserSid    = [System.Security.SecurityElement]::Escape($userSid)
+
+# Replace placeholders in the template
+$xmlResolved = $xmlContent `
+    -replace "__SCRIPT_PATH__",  $escapedScriptPath `
+    -replace "__WORK_DIR__",     $escapedWorkDir `
+    -replace "__USERNAME__",     $escapedUser `
+    -replace "__USERNAME_SID__", $escapedUserSid
+
+# Write the resolved XML to a persistent task XML in the install dir
+$taskXmlResolvedPath = Join-Path $InstallDir "Task-YubiKeyPresenceLock.xml"
+Set-Content -Path $taskXmlResolvedPath -Value $xmlResolved -Encoding Unicode
+Write-Host "Generated task XML: $taskXmlResolvedPath" -ForegroundColor Green
+
+# Optional DEBUG XML dump
+if ($DebugXml) {
+    $debugXmlPath = Join-Path $InstallDir "DEBUG-Task-Resolved.xml"
+    Set-Content -Path $debugXmlPath -Value $xmlResolved -Encoding Unicode
+    Write-Host "DEBUG: Wrote resolved XML to $debugXmlPath" -ForegroundColor Yellow
+}
+
 # ---------- Register Scheduled Task using SCHTASKS.EXE ----------
 Write-Host "Registering scheduled task '$TaskName'..."
-
-# Write resolved XML to temp file as UTF-16 LE (Task Scheduler requirement)
-$xmlTempPath = Join-Path $env:TEMP ("task-" + [guid]::NewGuid().ToString() + ".xml")
-Set-Content -Path $xmlTempPath -Value $xmlResolved -Encoding Unicode
 
 # Remove existing task if present
 try {
@@ -244,18 +286,14 @@ try {
     }
 } catch {}
 
-Write-Host "Importing task from XML..."
-schtasks.exe /create /tn "$TaskName" /xml "$xmlTempPath" /f | Out-Null
+Write-Host "Importing task from generated XML..."
+schtasks.exe /create /tn "$TaskName" /xml "$taskXmlResolvedPath" /f | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to register scheduled task. schtasks.exe exited with code $LASTEXITCODE."
 }
 
-Remove-Item $xmlTempPath -Force
-
 Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
-
-
 
 Write-Host ""
 Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
