@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Test-AdminElevation {
+    # Check if already elevated
     $current = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($current)
 
@@ -17,19 +18,24 @@ function Test-AdminElevation {
         return
     }
 
-    Write-Warning "Not running as administrator. Attempting elevation..."
+    Write-Warning "Not running as Administrator. Elevating..."
 
-    # Capture exact user command line including parameters
-    $command = $MyInvocation.Line
-    if (-not $command) {
-        throw "Unable to retrieve invocation line for elevation."
+    # Explicit Windows PowerShell 5.1 path
+    $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+    # Capture exact command used to launch the script
+    $invocation = $MyInvocation.Line
+    if (-not $invocation) {
+        throw "Unable to capture the invocation line. Do not run this script from ISE or through pwsh.exe."
     }
 
-    # Relaunch with elevation
-    Start-Process -FilePath "powershell.exe" -ArgumentList $command -Verb RunAs
+    # Relaunch elevated (no -NoExit)
+    Start-Process -FilePath $psExe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass", "-Command", $invocation
 
+    # Stop the non-admin instance
     exit
 }
+
 
 
 if ($Help) {
@@ -77,8 +83,7 @@ catch {
     Write-Error "Failed to remove scheduled task '$TaskName': $($_.Exception.Message)"
 }
 
-if ($Host.Name -match "ConsoleHost") {
+if ($Host.Name -eq "ConsoleHost") {
     Write-Host ""
-    Write-Host "Completed. Press Enter to continue..."
-    [void][System.Console]::ReadLine()
+    Read-Host "Press Enter to exit..."
 }
