@@ -18,6 +18,7 @@ This project includes:
 > PowerShell 7+ (pwsh.exe) is **not supported** for toast notifications, PnP enumeration, or hidden scheduled task windows.
 
 [BurntToast - GitHub](https://github.com/Windos/BurntToast)
+
 [BurntToast - PSGallery](https://www.powershellgallery.com/packages/BurntToast/1.1.0)
 
 ---
