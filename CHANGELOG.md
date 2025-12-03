@@ -21,6 +21,8 @@ All notable changes to USBKeyPresenceLock.ps1 are documented here.
 - **Parameter for runtime control** - Added `-lockedHeartbeatInterval` parameter to override heartbeat frequency without editing the script.
 - **Install script WhatIf mode** - Install script now supports `-WhatIf` parameter to preview all operations (file copies, ACL changes, EventLog source creation, task registration) without making changes.
 - **Uninstall script WhatIf mode** - Uninstall script now supports `-WhatIf` parameter to preview task deletion without making changes.
+- **Support file distribution** - Install script now copies `Uninstall-USBKeyPresenceWatcher.ps1`, `LICENSE`, `NOTICE`, and `README.md` to the install directory for easy access and complete offline documentation.
+- **Complete uninstall cleanup** - Uninstall script now removes all files from the installation directory and deletes the directory itself, leaving no trace of the installation.
 
 ### Changed
 - **Logon enforcement loop** - Now locks workstation only once if security key is missing at logon, then breaks. Previously would repeatedly lock every loop iteration.
@@ -33,6 +35,7 @@ All notable changes to USBKeyPresenceLock.ps1 are documented here.
   - `Template-YubiKeyPresenceLock.xml` → `Template-USBKeyPresenceLock.xml`
   - Event Log source: `YubiKeyPresenceWatcher` → `USBKeyPresenceWatcher`
   - Log files: `YubiKeyPresenceLock.log` → `USBKeyPresenceLock.log`
+- **Uninstall workflow** - Uninstaller now completely removes all files in the installation directory and the directory itself for clean removal without manual intervention.
 
 ### Technical Details
 - **ShouldPerform helper function** - Portable emulation of ShouldProcess that works with or without `$PSCmdlet` availability, allowing `-WhatIf` support without `[CmdletBinding]` parser issues.

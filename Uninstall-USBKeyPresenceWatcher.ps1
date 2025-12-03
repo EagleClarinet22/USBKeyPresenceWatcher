@@ -82,6 +82,9 @@ Test-AdminElevation
 
 Write-Host "Uninstalling scheduled task '$TaskName'..." -ForegroundColor Cyan
 
+# Determine the install directory from this script's location
+$InstallDir = Split-Path -Parent $PSCommandPath
+
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 try {
     # Check if the task exists
@@ -106,9 +109,27 @@ try {
 
         Write-Host "Scheduled task '$TaskName' removed successfully." -ForegroundColor Green
     }
+    
+    # Clean up the install directory
+    Write-Host "Cleaning up installation directory: $InstallDir" -ForegroundColor Yellow
+    if (ShouldPerform("Installation directory '$InstallDir'", "Remove")) {
+        # Remove all files in the install directory (including this uninstall script)
+        Get-ChildItem -Path $InstallDir -File | ForEach-Object {
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Remove the directory itself
+        Remove-Item -Path $InstallDir -Force -ErrorAction SilentlyContinue
+        
+        if (Test-Path $InstallDir) {
+            Write-Warning "Could not fully remove directory '$InstallDir'. You may need to remove it manually."
+        } else {
+            Write-Host "Installation directory removed successfully." -ForegroundColor Green
+        }
+    }
 }
 catch {
-    Write-Error "Failed to remove scheduled task '$TaskName': $($_.Exception.Message)"
+    Write-Error "Failed to complete uninstallation: $($_.Exception.Message)"
 }
 # PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 

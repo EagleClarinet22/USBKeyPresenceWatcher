@@ -104,31 +104,47 @@ If desired: Start key → Windows Powershell → Run as Administrator
 
 
 ```powershell
-.\Install-YubiKeyPresenceWatcher.ps1
+.\Install-USBKeyPresenceWatcher.ps1
 ```
 
 To see options:
 
 ```powershell
-.\Install-YubiKeyPresenceWatcher.ps1 -Help
+.\Install-USBKeyPresenceWatcher.ps1 -Help
 ```
 
 Common flags:
 
 ```powershell
 # Change install directory
-__defaults to C:\Scripts\YubiKey__
-.\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKeyPresenceWatcher'
+# defaults to C:\Scripts\USBKeyPresenceWatcher-Install
+.\Install-USBKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\USBKey'
 
 # Force replace existing files & scheduled task
-.\Install-YubiKeyPresenceWatcher.ps1 -Force
+.\Install-USBKeyPresenceWatcher.ps1 -Force
 
 # Skip device picker and supply a known VID/PID
-.\Install-YubiKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'
+.\Install-USBKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'
 
 # Output DEBUG-Task-Resolved.xml for troubleshooting
-.\Install-YubiKeyPresenceWatcher.ps1 -DebugXml
+.\Install-USBKeyPresenceWatcher.ps1 -DebugXml
+
+# Preview what would be installed (no changes made)
+.\Install-USBKeyPresenceWatcher.ps1 -WhatIf
 ```
+
+### What gets installed
+
+The installer copies the following files to your install directory:
+
+- `USBKeyPresenceLock.ps1` - The main watcher script
+- `Template-USBKeyPresenceLock.xml` - Task scheduler template (used to generate the runtime XML)
+- `Uninstall-USBKeyPresenceWatcher.ps1` - Uninstall script (for clean removal)
+- `lock_toast_64.png` - Icon for toast notifications
+- `LICENSE` - MIT license
+- `NOTICE` - Attribution notice
+- `README.md` - This documentation
+- `Task-USBKeyPresenceLock.xml` - Generated at runtime (user and SID-specific)
 
 ---
 
@@ -258,26 +274,42 @@ Re-run with:
 
 ## Recommended: Use the uninstaller script
 
+The uninstall script is included in your install directory:
+
 ```powershell
-.\Uninstall-YubiKeyPresenceWatcher.ps1
+C:\Scripts\USBKeyPresenceWatcher-Install\Uninstall-USBKeyPresenceWatcher.ps1
+```
+
+Or from the repo:
+
+```powershell
+.\Uninstall-USBKeyPresenceWatcher.ps1
 ```
 
 For options:
 
 ```powershell
-.\Uninstall-YubiKeyPresenceWatcher.ps1 -Help
+.\Uninstall-USBKeyPresenceWatcher.ps1 -Help
 ```
 
-This will:
+This will automatically:
 
 - Auto-elevate itself if needed  
 - Stop the running task  
 - Delete the scheduled task  
+- **Remove all files in the installation directory**
+- **Remove the installation directory itself**
 
 If you used a custom task name:
 
 ```powershell
-.\Uninstall-YubiKeyPresenceWatcher.ps1 -TaskName "My Custom Task"
+.\Uninstall-USBKeyPresenceWatcher.ps1 -TaskName "My Custom Task"
+```
+
+To preview what would be removed without making changes:
+
+```powershell
+.\Uninstall-USBKeyPresenceWatcher.ps1 -WhatIf
 ```
 
 ---
@@ -285,19 +317,19 @@ If you used a custom task name:
 ## Manual uninstall (advanced)
 
 ```powershell
-Unregister-ScheduledTask -TaskName "YubiKey Presence Watcher" -Confirm:$false
+Unregister-ScheduledTask -TaskName "USB Key Presence Watcher" -Confirm:$false
 ```
 
 Delete the install directory (default):
 
 ```
-C:\Scripts\YubiKey
+C:\Scripts\USBKeyPresenceWatcher-Install
 ```
 
 (Optional) Remove the EventLog source:
 
 ```powershell
-Remove-EventLog -Source YubiKeyPresenceWatcher
+Remove-EventLog -Source USBKeyPresenceWatcher
 ```
 
 ---

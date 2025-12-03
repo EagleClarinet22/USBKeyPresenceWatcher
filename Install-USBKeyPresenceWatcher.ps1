@@ -118,8 +118,15 @@ if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
 $scriptFile          = "USBKeyPresenceLock.ps1"
 $iconFile            = "lock_toast_64.png"
 $templateTaskXmlFile = "Template-USBKeyPresenceLock.xml"
+$uninstallScript     = "Uninstall-USBKeyPresenceWatcher.ps1"
+$licenseFile         = "LICENSE"
+$noticeFile          = "NOTICE"
+$readmeFile          = "README.md"
 
-foreach ($f in @($scriptFile, $iconFile, $templateTaskXmlFile)) {
+$requiredFiles = @($scriptFile, $iconFile, $templateTaskXmlFile)
+$optionalFiles = @($uninstallScript, $licenseFile, $noticeFile, $readmeFile)
+
+foreach ($f in $requiredFiles) {
     $fullPath = Join-Path $SourceDir $f
     if (-not (Test-Path $fullPath)) {
         throw "Required file '$f' not found in source directory: $SourceDir"
@@ -238,9 +245,18 @@ if (-not (Test-Path $InstallDir)) {
 # ---------- Copy files into install directory ----------
 Write-Host "Copying files to $InstallDir..."
 if (ShouldPerform("Files in $InstallDir", "Copy")) {
+    # Copy required files
     Copy-Item (Join-Path $SourceDir $scriptFile)          -Destination $InstallDir -Force
     Copy-Item (Join-Path $SourceDir $iconFile)            -Destination $InstallDir -Force
     Copy-Item (Join-Path $SourceDir $templateTaskXmlFile) -Destination $InstallDir -Force
+    
+    # Copy optional files (for documentation and uninstallation)
+    foreach ($optFile in $optionalFiles) {
+        $srcPath = Join-Path $SourceDir $optFile
+        if (Test-Path $srcPath) {
+            Copy-Item $srcPath -Destination $InstallDir -Force
+        }
+    }
 }
 
 # ---------- Patch ONLY the installed script with the selected VID/PID ----------
