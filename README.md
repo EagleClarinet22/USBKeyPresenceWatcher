@@ -7,7 +7,7 @@ Automatically lock your Windows session when your YubiKey (or *any* chosen USB d
 This project includes:
 
 - A PowerShell presence watcher
-- Toast notifications via [BurntToast] (optional)
+- Toast notifications via BurntToast (optional)
 - A Windows Scheduled Task to start the watcher automatically
 - Event Viewer logging (with file fallback)
 - A fully interactive **installer** that detects your USB devices and lets you choose which one to monitor
@@ -17,6 +17,8 @@ This project includes:
 > ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).
 > PowerShell 7+ (pwsh.exe) is **not supported** for toast notifications, PnP enumeration, or hidden scheduled task windows.
 
+
+### BurntToast Install Links
 [BurntToast - GitHub](https://github.com/Windos/BurntToast)
 
 [BurntToast - PSGallery](https://www.powershellgallery.com/packages/BurntToast/1.1.0)
