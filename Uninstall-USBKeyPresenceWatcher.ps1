@@ -59,7 +59,6 @@ function Test-AdminElevation {
     exit
 }
 
-
 if ($Help) {
     Write-Host "Uninstall-USBKeyPresenceWatcher.ps1" -ForegroundColor Cyan
     Write-Host ""

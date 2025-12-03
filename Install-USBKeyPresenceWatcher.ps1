@@ -68,7 +68,6 @@ function Test-AdminElevation {
     exit
 }
 
-
 # ---------- Help handler (can be shown without admin) ----------
 if ($Help) {
     Write-Host "Install-USBKeyPresenceWatcher.ps1" -ForegroundColor Cyan
