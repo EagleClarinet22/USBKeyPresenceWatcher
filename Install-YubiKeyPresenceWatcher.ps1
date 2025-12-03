@@ -231,9 +231,9 @@ try {
 # ---------- Register Scheduled Task using SCHTASKS.EXE ----------
 Write-Host "Registering scheduled task '$TaskName'..."
 
-# Write resolved XML to temp file
+# Write resolved XML to temp file as UTF-16 LE (Task Scheduler requirement)
 $xmlTempPath = Join-Path $env:TEMP ("task-" + [guid]::NewGuid().ToString() + ".xml")
-Set-Content -Path $xmlTempPath -Value $xmlResolved -Encoding UTF8
+Set-Content -Path $xmlTempPath -Value $xmlResolved -Encoding Unicode
 
 # Remove existing task if present
 try {
@@ -245,7 +245,7 @@ try {
 } catch {}
 
 Write-Host "Importing task from XML..."
-$null = schtasks.exe /create /tn "$TaskName" /xml "$xmlTempPath" /f
+schtasks.exe /create /tn "$TaskName" /xml "$xmlTempPath" /f | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to register scheduled task. schtasks.exe exited with code $LASTEXITCODE."
@@ -254,6 +254,7 @@ if ($LASTEXITCODE -ne 0) {
 Remove-Item $xmlTempPath -Force
 
 Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
+
 
 
 Write-Host ""
