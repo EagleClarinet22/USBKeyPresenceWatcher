@@ -1,4 +1,6 @@
 # YubiKey Presence Lock for Windows
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue)
 
 Automatically lock your Windows session when your YubiKey (or *any* chosen USB device) is removed - and keep the system locked until that device is reinserted.
 
