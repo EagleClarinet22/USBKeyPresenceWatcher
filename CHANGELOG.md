@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.2.0] - 2025-12-03
+- **Fresh release to bring everything up-to-date**: Just bringing everything together!
+
 ## [1.0.2.1] - 2025-12-03
 - **Added formatting and made pretty** - updated Installer script to run more smoothly and provide more opportunities to abort install.
 
