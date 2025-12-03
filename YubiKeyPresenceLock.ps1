@@ -14,11 +14,14 @@ $yubiPrefix = "VID_1050&PID_0407"
 # How many consecutive "missing" checks before we lock (hub resilience)
 $missingThreshold = 2       # 2 checks * 1 sec = ~2 seconds
 
+# Figure out where this script lives
+$ScriptRoot = Split-Path -Parent $PSCommandPath
+
 # Log file (fallback if EventLog not available)
-$logPath = "$env:LOCALAPPDATA\YubiKeyPresenceLock.log"
+$logPath = Join-Path $env:LOCALAPPDATA "YubiKeyPresenceLock.log"
 
 # Icon for toast notifications (optional)
-$iconPath = "C:\Scripts\YubiKeyPresenceWatcher\lock_toast_64.png"
+$iconPath = Join-Path $ScriptRoot "lock_toast_64.png"
 
 # Event Log config
 $eventLogName = "Application"
