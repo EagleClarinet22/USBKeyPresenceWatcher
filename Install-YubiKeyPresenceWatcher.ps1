@@ -23,34 +23,24 @@ function Test-AdminElevation {
         return
     }
 
-    Write-Warning "Not running elevated. Restarting with administrator privileges..."
+    Write-Warning "Not running elevated. Restarting with Administrator privileges..."
 
     $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-    # Build argument list manually
-    $args = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+    # Build argument list using actual bound variables
+    $argList = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
 
-    foreach ($key in $PSBoundParameters.Keys) {
-        $value = $PSBoundParameters[$key]
+    if ($InstallDir) { $argList += @("-InstallDir", "`"$InstallDir`"") }
+    if ($TaskName)   { $argList += @("-TaskName", "`"$TaskName`"") }
+    if ($YubiPrefix) { $argList += @("-YubiPrefix", "`"$YubiPrefix`"") }
+    if ($Force)      { $argList += "-Force" }
+    if ($DebugXml)   { $argList += "-DebugXml" }
+    if ($Help)       { $argList += "-Help" }
 
-        if ($value -is [System.Management.Automation.SwitchParameter]) {
-            if ($value.IsPresent) {
-                $args += "-$key"
-            }
-        }
-        else {
-            $escaped = $value.ToString().Replace('"', '\"')
-            $args += "-$key"
-            $args += "`"$escaped`""
-        }
-    }
-
-    Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $args
+    Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $argList
 
     exit
 }
-
-
 
 
 # ---------- Help handler (can be shown without admin) ----------
