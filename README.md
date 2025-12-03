@@ -1,6 +1,6 @@
 # YubiKey Presence Lock for Windows
 
-Automatically lock your Windows session when your YubiKey (or *any* chosen USB device) is removed — and keep the system locked until that device is reinserted.
+Automatically lock your Windows session when your YubiKey (or *any* chosen USB device) is removed - and keep the system locked until that device is reinserted.
 
 This project includes:
 
@@ -9,283 +9,313 @@ This project includes:
 - A Windows Scheduled Task to start the watcher automatically
 - Event Viewer logging (with file fallback)
 - A fully interactive **installer** that detects your USB devices and lets you choose which one to monitor
+- A matching **uninstaller** to cleanly remove the scheduled task
+- A self-elevating install/uninstall flow (prompts for admin if needed)
 
-> ⚠️ The script must run using **Windows PowerShell 5.1** (built into Windows).  
-PowerShell 7+ (pwsh) is **not supported** for this task.
+> ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).
+> PowerShell 7+ (pwsh.exe) is **not supported** for toast notifications, PnP enumeration, or hidden scheduled task windows.
 
-[BurntToast]: https://github.com/Windos/BurntToast
+[BurntToast - GitHub]: https://github.com/Windos/BurntToast
+[BurntToast - PSGallery]: https://www.powershellgallery.com/packages/BurntToast/1.1.0
 
 ---
 
 ## ✨ Features
 
 ### 🔐 Presence-based security  
-Your workstation locks automatically when your chosen USB device disappears and remains locked until the device is reinserted.
+Your workstation locks itself automatically when your selected USB device disappears - and keeps the system locked until the device returns.
 
 ### 🔁 Persistent lock enforcement  
-If you try to unlock the PC while the device is missing, the watcher instantly relocks your session.
+If unlocked manually while your device is missing, the watcher re-locks the workstation instantly.
 
 ### 🔔 Toast notifications  
 Optional (BurntToast module):
 
-- Monitoring started  
-- Device removed  
-- Device reinserted  
+- Monitoring started
+- Device removed
+- Device reinserted
 
 ### 🧱 Hub-resilience  
-The watcher ignores short USB glitches and only locks after “N” consecutive absence checks.
+Prevents false locks caused by USB hub power blips.  
+(Default: requires “2 consecutive misses” before locking.)
 
 ### 🗂 Automatic Event Viewer logging  
-Every action is logged under the `Application` log, source `YubiKeyPresenceWatcher`.
+All activity is logged under:
+- Log: **Application**
+- Source: **YubiKeyPresenceWatcher**
 
-### 🧩 One-time configuration  
+### 🧩 Smart installer workflow  
 The installer:
 
-- Detects connected USB devices
-- Lets you **select** your YubiKey (or any device)
-- Automatically extracts the correct `VID_XXXX&PID_YYYY`
-- Updates ONLY the installed script with that value  
-- Leaves your repo version untouched
+- Detects all USB devices containing a VID/PID
+- Lets you select the YubiKey (or any desired USB device)
+- Extracts the correct `VID_XXXX&PID_YYYY`
+- Updates only the *installed* script (never your repo version)
+- Hardens the install directory ACLs
+- Creates the EventLog source
+- Generates a runtime task XML file:  
+  - `Template-YubiKeyPresenceLock.xml` → `Task-YubiKeyPresenceLock.xml`
+- Registers the Scheduled Task
 
-### 🔒 Secure installation folder  
-The installer creates (or uses) `C:\Scripts\YubiKey` and tightens permissions to:
+Your repo stays clean - only the generated XML is ignored using `.gitignore`.
 
-- The installing user
+### 🔒 Secure installation directory  
+The installer assigns FullControl to:
+
+- The current user
 - SYSTEM
 - Administrators
 
+All others are removed.
+
 ---
 
-## 🚀 Installation
+# 🚀 Installation
 
-## 1. Clone or download the repository
+## 1. Clone or download the project
 
 ```powershell
 git clone https://github.com/<your-username>/<your-repo>.git
 cd <your-repo>
 ```
 
-Or download the ZIP and extract it.
+Or download and extract the ZIP.
 
 ---
 
-## 2. Run PowerShell as Administrator (first install only)
-
-Right-click **Windows PowerShell** → **Run as administrator**
-
-Then:
+## 2. (Recommended) Allow local scripts to run
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
-This allows local scripts to run.
-
 ---
 
 ## 3. Run the installer
-
-From the repo directory:
 
 ```powershell
 .\Install-YubiKeyPresenceWatcher.ps1
 ```
 
-For guidance on installation:
+To see options:
+
 ```powershell
 .\Install-YubiKeyPresenceWatcher.ps1 -Help
 ```
-**or**
+
+Common flags:
+
 ```powershell
-.\Install-YubiKeyPresenceWatcher.ps1 --Help
+# Change install directory
+.\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKeyPresenceWatcher'
+
+# Force replace existing files & scheduled task
+.\Install-YubiKeyPresenceWatcher.ps1 -Force
+
+# Skip device picker and supply a known VID/PID
+.\Install-YubiKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'
+
+# Output DEBUG-Task-Resolved.xml for troubleshooting
+.\Install-YubiKeyPresenceWatcher.ps1 -DebugXml
 ```
 
-Once the script is started, you will be shown a list of detected USB devices containing a `VID_XXXX&PID_YYYY`.
+---
 
-Example:
+## 4. Choose your USB device
+
+The installer lists every detected USB device containing a VID/PID, for example:
 
 ```
 [0] YubiKey OTP+FIDO+CCID
      USB\VID_1050&PID_0407\...
 
-[1] USB Input Device
+[1] USB Receiver
      USB\VID_046D&PID_C534\...
 ```
 
-Type:
+Type the number shown, or press:
 
-- The number corresponding to your YubiKey, **or**
-- `M` to manually enter a VID/PID prefix (e.g., `VID_1050&PID_0407`)
+- `M` - manually enter a VID/PID such as `VID_1050&PID_0407`
 
-The installer will then:
+The installer then:
 
-- Copy the script files into `C:\Scripts\YubiKey`
-- Patch the installed script with your selected VID/PID  
-- Harden folder permissions  
-- Create the EventLog source (if allowed)  
-- Register the Scheduled Task using the XML template  
-- Substitute:
-  - `__SCRIPT_PATH__`
-  - `__WORK_DIR__`
-  - `__USERNAME__`
-  - `__USERNAME_SID__`
+- Copies files into the install folder  
+- Patches the installed script with your VID/PID  
+- Hardens ACLs  
+- Creates the EventLog source  
+- Generates `Task-YubiKeyPresenceLock.xml`  
+- Registers the scheduled task  
 
-Your repo files remain unchanged.
-
----
-
-## 4. Log off and log back in
-
-You should see:
-
-- “YubiKey Watcher — Monitoring started” (toast)
-- System locks a moment after you remove the selected USB device
+The `Template-YubiKeyPresenceLock.xml` file in your repo **is never modified**.
 
 ---
 
 # 🔧 Configuration
 
-## Changing which device to monitor  
-Since the watcher script is patched during install, you must **re-run the installer** if you want to choose a different device:
+## Change which device is monitored  
+Re-run the installer:
 
 ```powershell
 .\Install-YubiKeyPresenceWatcher.ps1 -Force
 ```
 
-This overwrites the installed script and re-registers the Scheduled Task.
+This regenerates:
+
+- The patched installed script  
+- The resolved task XML  
+- The scheduled task  
 
 ---
 
-## Hub-resilience threshold  
-In the script (installed copy):
+## Hub-resilience tuning  
+In the **installed** script (not the repo copy):
 
 ```powershell
 $missingThreshold = 2
 ```
 
-This means:
-
-- 1 check per second
-- Locks after 2 seconds of absence
-
-Increase for flaky USB hubs (e.g., `3` or `4`).
-
----
-
-## Task Scheduler Configuration
-
-The installed Scheduled Task:
-
-- Runs **only when the user is logged on**
-- Uses `powershell.exe -WindowStyle Hidden`
-- Starts at:
-  - Logon
-  - Workstation unlock (optional in your template)
-- Runs with **highest privileges**
+Higher values (e.g., 3–4) improve stability on noisy USB hubs.
 
 ---
 
 # ❓ FAQ
 
-### Do I need to know my YubiKey’s VID/PID?
-No — the installer detects and lists all USB devices automatically.
+### Do I need my VID/PID?  
+No - the installer detects options automatically.
 
-### Does this replace password login?
-No. This is **presence-based session locking**, not authentication replacement.
+### Does this replace login authentication?  
+No - this only **locks** your session based on device presence.
 
-### Does this work if I log in with Windows Hello PIN?
-Yes — the watcher enforces presence **after login**, not before.
+### Does this work with Windows Hello PIN?  
+Yes. It enforces presence *after* login.
 
 ### Do I need BurntToast?  
-No. If the module cannot be imported, the script runs normally without notifications.
+No - toast notifications are optional.
 
-### Can I use PowerShell 7 instead of Windows PowerShell 5.1?
-No. The following features require Windows PowerShell 5.1:
-
-- BurntToast
-- PnpDevice module
-- UWP/WinRT toast infrastructure
-- Task Scheduler hidden-window mode
-
-### Does the watcher ask for the device every time it runs?
-**Never.**  
-The *installer* asks once.  
-The *runtime script* uses the patched value.
+### Why Windows PowerShell instead of PowerShell 7+?  
+Scheduled tasks using hidden windows + BurntToast + PnpDevice require Windows PowerShell 5.1.
 
 ---
 
 # 🛠 Troubleshooting
 
-### No notification toasts
-- Install BurntToast:
+### No toast notifications  
+Install BurntToast:
 
-  ```powershell
-  Install-Module BurntToast -Scope CurrentUser
-  ```
+```powershell
+Install-Module BurntToast -Scope CurrentUser
+```
 
-- Make sure the Task is running as **your user**  
-- Ensure "Run only when user is logged on" is enabled
+Ensure:
 
-### The script is not locking the PC
-Check Event Viewer → **Application log → Source: YubiKeyPresenceWatcher**
+- Task runs as the logged-in user  
+- “Run only when user is logged on” is enabled  
 
-You should see messages like:
+---
 
-- "YubiKey missing. Beginning hub-resilience countdown."
-- "YubiKey still missing. Consecutive missing count: X"
-- "Locking workstation."
+### Presence lock not triggering  
+Check Event Viewer:
 
-If not:
+```
+Windows Logs → Application → Source: YubiKeyPresenceWatcher
+```
 
-- Ensure the scheduled task is running
-- Ensure VID/PID matches your device:
+You should see entries such as:
 
-  ```powershell
-  Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like "*VID_*" }
-  ```
+- YubiKey missing
+- Countdown in progress
+- Locking workstation
+
+---
 
 ### Scheduled Task fails to register  
-Typical causes:
+Common causes:
 
-- You did not run the installer as Administrator  
-- Your XML file has been modified accidentally  
-- Windows blocked execution of the installer (right-click → Unblock)
+- Elevation denied (UAC prompt declined)
+- Modified/corrupt XML
+- Execution policy blocking script
+
+Re-run with:
+
+```powershell
+.\Install-YubiKeyPresenceWatcher.ps1 -Force
+```
 
 ---
 
 # 🧹 Uninstallation
 
-1. Delete the scheduled task:
+## Recommended: Use the uninstaller script
 
-   ```powershell
-   Unregister-ScheduledTask -TaskName "YubiKey Presence Watcher" -Confirm:$false
-   ```
+```powershell
+.\Uninstall-YubiKeyPresenceWatcher.ps1
+```
 
-2. Delete the install folder:
+For options:
 
-   ```
-   C:\Scripts\YubiKey
-   ```
+```powershell
+.\Uninstall-YubiKeyPresenceWatcher.ps1 -Help
+```
 
-3. (Optional) Remove the EventLog source:
+This will:
 
-   ```powershell
-   Remove-EventLog -Source YubiKeyPresenceWatcher
-   ```
+- Auto-elevate itself if needed  
+- Stop the running task  
+- Delete the scheduled task  
+
+If you used a custom task name:
+
+```powershell
+.\Uninstall-YubiKeyPresenceWatcher.ps1 -TaskName "My Custom Task"
+```
+
+---
+
+## Manual uninstall (advanced)
+
+```powershell
+Unregister-ScheduledTask -TaskName "YubiKey Presence Watcher" -Confirm:$false
+```
+
+Delete the install directory (default):
+
+```
+C:\Scripts\YubiKey
+```
+
+(Optional) Remove the EventLog source:
+
+```powershell
+Remove-EventLog -Source YubiKeyPresenceWatcher
+```
 
 ---
 
 # 🤝 Contributing
 
-- Pull requests welcome  
-- Issues can be reported via GitHub  
-- Please include reproduction steps and your OS version
+Pull requests are welcome.  
+If reporting issues, please include:
+
+- Windows version  
+- Device VID/PID  
+- Events from Event Viewer  
 
 ---
 
-# 📜 License
+## License
 
-MIT License — see `LICENSE` file.
+This project is licensed under the [MIT License](./LICENSE).
+
+## Attribution
+
+If you use this project, or substantial portions of its scripts, in your own
+work, attribution to the original author is appreciated:
+
+- Author: **EagleClarinet22 (Connor Anderson)**
+- Please retain the [NOTICE](./NOTICE) file where practical.
+
+Attribution is not required by the license, but it is encouraged.
+
 
 ---
 

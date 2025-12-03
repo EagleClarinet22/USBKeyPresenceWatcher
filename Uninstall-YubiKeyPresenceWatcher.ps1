@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Connor Anderson (EagleClarinet22)
+
 [CmdletBinding()]
 param(
     [string]$TaskName = "YubiKey Presence Watcher",

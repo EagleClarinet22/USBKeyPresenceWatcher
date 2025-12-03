@@ -1,4 +1,6 @@
-﻿# C:\Scripts\YubiKeyPresenceWatcher\YubiKeyPresenceLock.ps1
+﻿# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Connor Anderson (EagleClarinet22)
+
 # YubiKey presence watcher:
 # - Watches for a YubiKey (VID_1050&PID_0407) via PnP.
 # - Locks the workstation if it's missing for N consecutive checks.
