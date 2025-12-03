@@ -23,7 +23,7 @@ function Test-AdminElevation {
         return
     }
 
-    Write-Warning "Not running elevated. Restarting with Administrator privileges..."
+    Write-Warning "Not running elevated. Opening PowerShell session with Administrator privileges..."
 
     $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
