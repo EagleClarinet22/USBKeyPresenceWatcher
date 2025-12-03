@@ -12,7 +12,7 @@ Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColo
 # Resolve source directory (where this installer lives)
 $SourceDir = Split-Path -Parent $PSCommandPath
 
-# Files we expect in the repo
+# Files expected in repo
 $scriptFile   = "YubiKeyPresenceLock.ps1"
 $iconFile     = "lock_toast_64.png"
 $taskXmlFile  = "Task-YubiKeyPresenceLock.xml"
@@ -37,11 +37,10 @@ Copy-Item (Join-Path $SourceDir $scriptFile)  -Destination $InstallDir -Force
 Copy-Item (Join-Path $SourceDir $iconFile)    -Destination $InstallDir -Force
 Copy-Item (Join-Path $SourceDir $taskXmlFile) -Destination $InstallDir -Force
 
-# Harden ACLs on install directory
+# Hardening ACLs on the directory
 Write-Host "Hardening ACLs on $InstallDir..."
 
 $acl = New-Object System.Security.AccessControl.DirectorySecurity
-
 $inheritFlags      = [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
 $propagationFlags  = [System.Security.AccessControl.PropagationFlags]::None
 $accessControlType = [System.Security.AccessControl.AccessControlType]::Allow
@@ -58,9 +57,7 @@ foreach ($id in @($currentUser, $admins, $system)) {
     $acl.AddAccessRule($rule) | Out-Null
 }
 
-# Apply ACL to folder
 Set-Acl -Path $InstallDir -AclObject $acl
-
 Write-Host "ACLs set: $($currentUser.Value), Administrators, SYSTEM have FullControl." -ForegroundColor Green
 
 # Ensure EventLog source exists
@@ -69,39 +66,43 @@ $eventLogName = "Application"
 
 try {
     if (-not [System.Diagnostics.EventLog]::SourceExists($eventSource)) {
-        Write-Host "Creating EventLog source '$eventSource' in '$eventLogName' (may require admin)..."
+        Write-Host "Creating EventLog source '$eventSource' (admin required)..."
         New-EventLog -LogName $eventLogName -Source $eventSource
     }
 } catch {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
 
-# ----- Register Scheduled Task from XML template -----
+# ---- Register Scheduled Task from XML template ----
 Write-Host "Registering scheduled task '$TaskName'..."
 
 $scriptPath = Join-Path $InstallDir $scriptFile
 
-# Read XML template and replace placeholders
+# Resolve username + SID
+$username = $env:USERNAME
+$userSid  = (New-Object System.Security.Principal.NTAccount($username)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+
+# Load XML template
 $xmlTemplate = Get-Content (Join-Path $InstallDir $taskXmlFile) -Raw
 
-# In your XML, use __SCRIPT_PATH__ and __WORK_DIR__ as placeholders.
+# Replacement with proper XML escaping
 $xmlResolved = $xmlTemplate `
     -replace "__SCRIPT_PATH__", [System.Security.SecurityElement]::Escape($scriptPath) `
     -replace "__WORK_DIR__",    [System.Security.SecurityElement]::Escape($InstallDir) `
-    -replace "__USERNAME__",    [System.Security.SecurityElement]::Escape($env:USERNAME)
+    -replace "__USERNAME__",    [System.Security.SecurityElement]::Escape($username) `
+    -replace "__USERNAME_SID__", [System.Security.SecurityElement]::Escape($userSid)
 
-# Register the task
+# Delete any existing task first
 try {
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-        Write-Host "Existing task '$TaskName' found. Deleting..."
+        Write-Host "Existing task '$TaskName' found. Removing..."
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
+} catch {}
 
-    Register-ScheduledTask -TaskName $TaskName -Xml $xmlResolved -User $env:USERNAME -RunLevel Highest | Out-Null
-    Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
-} catch {
-    Write-Warning "Failed to register scheduled task: $($_.Exception.Message)"
-    throw
-}
+# Register new task
+Register-ScheduledTask -TaskName $TaskName -Xml $xmlResolved -User $username -RunLevel Highest | Out-Null
+
+Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
 
 Write-Host "Installation complete." -ForegroundColor Green
