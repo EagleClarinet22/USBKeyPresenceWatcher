@@ -3,15 +3,40 @@
 
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "C:\Scripts\YubiKey",
-    [string]$TaskName   = "YubiKey Presence Watcher",
+    [string]$InstallDir = "C:\Scripts\USBKeyPresenceWatcher-Install",
+    [string]$TaskName   = "USBKey Presence Watcher",
     [string]$YubiPrefix,
     [switch]$Force,
     [switch]$DebugXml,
+    [switch]$WhatIf,
     [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
+
+# Display WhatIf banner if enabled
+if ($WhatIf) {
+    Write-Host "[Simulation Mode] -WhatIf is enabled. No system changes will be made." -ForegroundColor Yellow
+}
+
+# Helper: unified ShouldProcess emulator for safe state-changing operations
+# PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
+function ShouldPerform {
+    param(
+        [string]$Target,
+        [string]$Action
+    )
+
+    # Emulate WhatIf behavior: if script-level -WhatIf or builtin WhatIfPreference is set,
+    # print a simulation line and return $false (do not perform).
+    if ($WhatIf -or $WhatIfPreference) {
+        Write-Host "WhatIf: $Action on $Target" -ForegroundColor Yellow
+        return $false
+    }
+
+    return $true
+}
+# PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 # ---------- Validate running as admin ----------
 function Test-AdminElevation {
@@ -35,6 +60,7 @@ function Test-AdminElevation {
     if ($YubiPrefix) { $argList += @("-YubiPrefix", "`"$YubiPrefix`"") }
     if ($Force)      { $argList += "-Force" }
     if ($DebugXml)   { $argList += "-DebugXml" }
+    if ($WhatIf)     { $argList += "-WhatIf" }
     if ($Help)       { $argList += "-Help" }
 
     Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $argList
@@ -45,38 +71,39 @@ function Test-AdminElevation {
 
 # ---------- Help handler (can be shown without admin) ----------
 if ($Help) {
-    Write-Host "Install-YubiKeyPresenceWatcher.ps1" -ForegroundColor Cyan
+    Write-Host "Install-USBKeyPresenceWatcher.ps1" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Installs the YubiKey Presence Watcher:"
+    Write-Host "Installs the USB Key Presence Watcher:"
     Write-Host " - Copies the script and icon to an install folder"
     Write-Host " - Prompts for (or uses) a YubiKey/USB VID/PID prefix"
     Write-Host " - Patches the installed script to use that VID/PID"
     Write-Host " - Hardens ACLs on the install folder"
     Write-Host " - Creates the EventLog source (if possible)"
-    Write-Host " - Generates Task-YubiKeyPresenceLock.xml from Template-YubiKeyPresenceLock.xml"
+    Write-Host " - Generates Task-USBKeyPresenceLock.xml from Template-USBKeyPresenceLock.xml"
     Write-Host " - Registers a Scheduled Task from the generated Task XML"
     Write-Host ""
     Write-Host "Parameters:"
-    Write-Host "  -InstallDir <path>      Target install folder (default: C:\Scripts\YubiKey)"
-    Write-Host "  -TaskName <name>        Scheduled Task name (default: 'YubiKey Presence Watcher')"
+    Write-Host "  -InstallDir <path>      Target install folder (default: C:\Scripts\USBKey)"
+    Write-Host "  -TaskName <name>        Scheduled Task name (default: 'USB Key Presence Watcher')"
     Write-Host "  -YubiPrefix <VID/PID>   Optional. Skip device selection and use this prefix directly."
     Write-Host "                          Example: -YubiPrefix 'VID_1050&PID_0407'"
     Write-Host "  -Force                  Overwrite existing files and re-register the task if present."
     Write-Host "  -DebugXml               Write DEBUG-Task-Resolved.xml with the resolved XML."
+    Write-Host "  -WhatIf                 Simulate operations without making any changes."
     Write-Host "  -Help                   Show this help text and exit."
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
-    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1"
-    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKey' -Force"
-    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'"
-    Write-Host "  .\Install-YubiKeyPresenceWatcher.ps1 -DebugXml"
+    Write-Host "  .\\Install-USBKeyPresenceWatcher.ps1"
+    Write-Host "  .\\Install-USBKeyPresenceWatcher.ps1 -InstallDir 'C:\\Scripts\\USBKey' -Force"
+    Write-Host "  .\\Install-USBKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'"
+    Write-Host "  .\\Install-USBKeyPresenceWatcher.ps1 -DebugXml"
     Write-Host ""
     return
 }
 
 Test-AdminElevation
 
-Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColor Cyan
+Write-Host "Installing USB Key Presence Watcher to: $InstallDir" -ForegroundColor Cyan
 
 # ---------- Resolve source directory (where this installer lives) ----------
 $SourceDir = Split-Path -Parent $PSCommandPath
@@ -88,9 +115,9 @@ if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
 }
 
 # Files expected in the repo/source directory
-$scriptFile          = "YubiKeyPresenceLock.ps1"
+$scriptFile          = "USBKeyPresenceLock.ps1"
 $iconFile            = "lock_toast_64.png"
-$templateTaskXmlFile = "Template-YubiKeyPresenceLock.xml"
+$templateTaskXmlFile = "Template-USBKeyPresenceLock.xml"
 
 foreach ($f in @($scriptFile, $iconFile, $templateTaskXmlFile)) {
     $fullPath = Join-Path $SourceDir $f
@@ -123,7 +150,7 @@ function Get-YubiPrefixFromUser {
 
             if ($devices -and $devices.Count -gt 0) {
                 Write-Host ""
-                Write-Host "Select the USB device to monitor for presence (likely your YubiKey or security key):" -ForegroundColor Yellow
+                Write-Host "Select the USB device to monitor for presence (likely your USB security key):" -ForegroundColor Yellow
                 Write-Host ""
 
                 for ($i = 0; $i -lt $devices.Count; $i++) {
@@ -197,7 +224,7 @@ if ($YubiPrefix) {
 } else {
     $selectedYubiPrefix = Get-YubiPrefixFromUser
     Write-Host ""
-    Write-Host "Final selected YubiKey/device prefix: $selectedYubiPrefix" -ForegroundColor Green
+    Write-Host "Final selected USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Green
 }
 
 # ---------- Create / validate install directory ----------
@@ -210,69 +237,83 @@ if (-not (Test-Path $InstallDir)) {
 
 # ---------- Copy files into install directory ----------
 Write-Host "Copying files to $InstallDir..."
-Copy-Item (Join-Path $SourceDir $scriptFile)          -Destination $InstallDir -Force
-Copy-Item (Join-Path $SourceDir $iconFile)            -Destination $InstallDir -Force
-Copy-Item (Join-Path $SourceDir $templateTaskXmlFile) -Destination $InstallDir -Force
+if (ShouldPerform("Files in $InstallDir", "Copy")) {
+    Copy-Item (Join-Path $SourceDir $scriptFile)          -Destination $InstallDir -Force
+    Copy-Item (Join-Path $SourceDir $iconFile)            -Destination $InstallDir -Force
+    Copy-Item (Join-Path $SourceDir $templateTaskXmlFile) -Destination $InstallDir -Force
+}
 
 # ---------- Patch ONLY the installed script with the selected VID/PID ----------
 $scriptDestPath = Join-Path $InstallDir $scriptFile
-$scriptContent  = Get-Content $scriptDestPath -Raw
 
-# We expect a line like: $yubiPrefix = "VID_1050&PID_0407"
-$pattern = '(\$yubiPrefix\s*=\s*")[^"]*(")'
+# Read script only in non-WhatIf mode; in WhatIf mode we skip the actual file ops
+if (-not ($WhatIf -or $WhatIfPreference)) {
+    $scriptContent  = Get-Content $scriptDestPath -Raw
 
-if ($scriptContent -match $pattern) {
-    $scriptContent = $scriptContent -replace $pattern, "`$1$selectedYubiPrefix`$2"
-    Set-Content -Path $scriptDestPath -Value $scriptContent -Encoding UTF8
-    Write-Host "Updated installed script with YubiKey/device prefix: $selectedYubiPrefix" -ForegroundColor Green
+    # We expect a line like: $yubiPrefix = "VID_1050&PID_0407"
+    $pattern = '(\$yubiPrefix\s*=\s*")[^"]*(")'
+
+    if ($scriptContent -match $pattern) {
+        $scriptContent = $scriptContent -replace $pattern, "`$1$selectedYubiPrefix`$2"
+        Set-Content -Path $scriptDestPath -Value $scriptContent -Encoding UTF8
+        Write-Host "Updated installed script with USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Green
+    } else {
+        Write-Warning "Could not find yubiPrefix assignment line to patch in the installed script. Check USBKeyPresenceLock.ps1 format."
+    }
 } else {
-    Write-Warning "Could not find yubiPrefix assignment line to patch in the installed script. Check YubiKeyPresenceLock.ps1 format."
+    Write-Host "WhatIf: Patch script with USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Yellow
 }
 
 # ---------- Harden ACLs on the install directory ----------
 Write-Host "Hardening ACLs on $InstallDir..."
 
-$acl = New-Object System.Security.AccessControl.DirectorySecurity
-$inheritFlags      = [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
-$propagationFlags  = [System.Security.AccessControl.PropagationFlags]::None
-$accessControlType = [System.Security.AccessControl.AccessControlType]::Allow
-$rights            = [System.Security.AccessControl.FileSystemRights]::FullControl
+if (ShouldPerform("Directory ACL on $InstallDir", "Set")) {
+    $acl = New-Object System.Security.AccessControl.DirectorySecurity
+    $inheritFlags      = [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
+    $propagationFlags  = [System.Security.AccessControl.PropagationFlags]::None
+    $accessControlType = [System.Security.AccessControl.AccessControlType]::Allow
+    $rights            = [System.Security.AccessControl.FileSystemRights]::FullControl
 
-# Use DOMAIN\Username form for safety (DOMAIN may be machine name)
-$accountName = "$env:USERDOMAIN\$env:USERNAME"
-$currentUser = New-Object System.Security.Principal.NTAccount($accountName)
-$admins      = New-Object System.Security.Principal.NTAccount("Administrators")
-$system      = New-Object System.Security.Principal.NTAccount("SYSTEM")
+    # Use DOMAIN\Username form for safety (DOMAIN may be machine name)
+    $accountName = "$env:USERDOMAIN\$env:USERNAME"
+    $currentUser = New-Object System.Security.Principal.NTAccount($accountName)
+    $admins      = New-Object System.Security.Principal.NTAccount("Administrators")
+    $system      = New-Object System.Security.Principal.NTAccount("SYSTEM")
 
-foreach ($id in @($currentUser, $admins, $system)) {
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $id, $rights, $inheritFlags, $propagationFlags, $accessControlType
-    )
-    $acl.AddAccessRule($rule) | Out-Null
+    foreach ($id in @($currentUser, $admins, $system)) {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $id, $rights, $inheritFlags, $propagationFlags, $accessControlType
+        )
+        $acl.AddAccessRule($rule) | Out-Null
+    }
+
+    Set-Acl -Path $InstallDir -AclObject $acl
+    Write-Host "ACLs set: $($currentUser.Value), Administrators, and SYSTEM have FullControl." -ForegroundColor Green
 }
 
-Set-Acl -Path $InstallDir -AclObject $acl
-Write-Host "ACLs set: $($currentUser.Value), Administrators, and SYSTEM have FullControl." -ForegroundColor Green
-
 # ---------- Ensure EventLog source exists ----------
-$eventSource  = "YubiKeyPresenceWatcher"
+$eventSource  = "USBKeyPresenceWatcher"
 $eventLogName = "Application"
 
+# PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 try {
     if (-not [System.Diagnostics.EventLog]::SourceExists($eventSource)) {
         Write-Host "Creating EventLog source '$eventSource' in '$eventLogName' (admin required)..." -ForegroundColor Yellow
-        New-EventLog -LogName $eventLogName -Source $eventSource
+        if (ShouldPerform("EventLog source '$eventSource'", "Create in $eventLogName")) {
+            New-EventLog -LogName $eventLogName -Source $eventSource
+        }
     }
 } catch {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
+# PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 # ---------- Build resolved task XML from template ----------
 $templateXmlPath = Join-Path $InstallDir $templateTaskXmlFile
 $xmlContent      = Get-Content $templateXmlPath -Raw
 
 # Values to plug into the XML
-$scriptPath  = $scriptDestPath      # full path to YubiKeyPresenceLock.ps1 in the install dir
+$scriptPath  = $scriptDestPath      # full path to USBKeyPresenceLock.ps1 in the install dir
 $workDir     = $InstallDir
 $accountName = "$env:USERDOMAIN\$env:USERNAME"
 
@@ -298,37 +339,47 @@ $xmlResolved = $xmlContent `
     -replace "__USERNAME_SID__", $escapedUserSid
 
 # Write the resolved XML to a persistent task XML in the install dir
-$taskXmlResolvedPath = Join-Path $InstallDir "Task-YubiKeyPresenceLock.xml"
-Set-Content -Path $taskXmlResolvedPath -Value $xmlResolved -Encoding Unicode
-Write-Host "Generated task XML: $taskXmlResolvedPath" -ForegroundColor Green
+$taskXmlResolvedPath = Join-Path $InstallDir "Task-USBKeyPresenceLock.xml"
+if (ShouldPerform("Task XML file '$taskXmlResolvedPath'", "Write")) {
+    Set-Content -Path $taskXmlResolvedPath -Value $xmlResolved -Encoding Unicode
+    Write-Host "Generated task XML: $taskXmlResolvedPath" -ForegroundColor Green
+}
 
 # Optional DEBUG XML dump
 if ($DebugXml) {
-    $debugXmlPath = Join-Path $InstallDir "DEBUG-Task-Resolved.xml"
-    Set-Content -Path $debugXmlPath -Value $xmlResolved -Encoding Unicode
-    Write-Host "DEBUG: Wrote resolved XML to $debugXmlPath" -ForegroundColor Yellow
+    $debugXmlPath = Join-Path $InstallDir "DEBUG-Task-USBKeyPresenceLock.xml"
+    if (ShouldPerform("DEBUG task XML file '$debugXmlPath'", "Write")) {
+        Set-Content -Path $debugXmlPath -Value $xmlResolved -Encoding Unicode
+        Write-Host "DEBUG: Wrote resolved XML to $debugXmlPath" -ForegroundColor Yellow
+    }
 }
 
 # ---------- Register Scheduled Task using SCHTASKS.EXE ----------
 Write-Host "Registering scheduled task '$TaskName'..."
 
+# PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 # Remove existing task if present
 try {
     schtasks.exe /query /tn "$TaskName" > $null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Existing task '$TaskName' found. Removing..."
-        schtasks.exe /delete /tn "$TaskName" /f > $null
+        if (ShouldPerform("Scheduled task '$TaskName'", "Delete existing")) {
+            schtasks.exe /delete /tn "$TaskName" /f > $null
+        }
     }
 } catch {}
 
 Write-Host "Importing task from generated XML..."
-schtasks.exe /create /tn "$TaskName" /xml "$taskXmlResolvedPath" /f | Out-Null
+if (ShouldPerform("Scheduled task '$TaskName'", "Create from XML")) {
+    schtasks.exe /create /tn "$TaskName" /xml "$taskXmlResolvedPath" /f | Out-Null
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to register scheduled task. schtasks.exe exited with code $LASTEXITCODE."
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to register scheduled task. schtasks.exe exited with code $LASTEXITCODE."
+    }
+
+    Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
 }
-
-Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
+# PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 Write-Host ""
 Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
