@@ -41,6 +41,12 @@ Write-Host "Installing YubiKey Presence Watcher to: $InstallDir" -ForegroundColo
 
 # ---------- Resolve source directory (where this installer lives) ----------
 $SourceDir = Split-Path -Parent $PSCommandPath
+$ResolvedInstallDir = Resolve-Path $Install-Dir -ErrorAction SilentlyContinue
+
+if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
+    throw "ERROR: Installer cannot run from the same directory it installs into. 
+    Move the installer out of '$InstallDir' or choose a different -InstallDir."
+}
 
 # Files expected in the repo/source directory
 $scriptFile   = "YubiKeyPresenceLock.ps1"
@@ -222,48 +228,33 @@ try {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
 
-# ---------- Register Scheduled Task from XML template ----------
+# ---------- Register Scheduled Task using SCHTASKS.EXE ----------
 Write-Host "Registering scheduled task '$TaskName'..."
 
-$scriptPath = $scriptDestPath
-
-# Resolve username + SID
-try {
-    $userNt  = New-Object System.Security.Principal.NTAccount($accountName)
-    $userSid = $userNt.Translate([System.Security.Principal.SecurityIdentifier]).Value
-} catch {
-    throw "Failed to resolve SID for user '$accountName': $($_.Exception.Message)"
-}
-
-# Load XML template from installed location
-$xmlTemplatePath = Join-Path $InstallDir $taskXmlFile
-$xmlTemplate     = Get-Content $xmlTemplatePath -Raw
-
-# Replacement with XML escaping for safety
-$xmlResolved = $xmlTemplate `
-    -replace "__SCRIPT_PATH__",   [System.Security.SecurityElement]::Escape($scriptPath) `
-    -replace "__WORK_DIR__",      [System.Security.SecurityElement]::Escape($InstallDir) `
-    -replace "__USERNAME__",      [System.Security.SecurityElement]::Escape($accountName) `
-    -replace "__USERNAME_SID__",  [System.Security.SecurityElement]::Escape($userSid)
+# Write resolved XML to temp file
+$xmlTempPath = Join-Path $env:TEMP ("task-" + [guid]::NewGuid().ToString() + ".xml")
+Set-Content -Path $xmlTempPath -Value $xmlResolved -Encoding UTF8
 
 # Remove existing task if present
 try {
-    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+    schtasks.exe /query /tn "$TaskName" > $null 2>&1
+    if ($LASTEXITCODE -eq 0) {
         Write-Host "Existing task '$TaskName' found. Removing..."
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+        schtasks.exe /delete /tn "$TaskName" /f > $null
     }
-} catch {
-    Write-Warning "Failed checking/removing existing task '$TaskName': $($_.Exception.Message)"
+} catch {}
+
+Write-Host "Importing task from XML..."
+$null = schtasks.exe /create /tn "$TaskName" /xml "$xmlTempPath" /f
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to register scheduled task. schtasks.exe exited with code $LASTEXITCODE."
 }
 
-# Register new task
-try {
-    Register-ScheduledTask -TaskName $TaskName -Xml $xmlResolved -User $accountName -RunLevel Highest | Out-Null
-    Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
-} catch {
-    Write-Warning "Failed to register scheduled task '$TaskName': $($_.Exception.Message)"
-    throw
-}
+Remove-Item $xmlTempPath -Force
+
+Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColor Green
+
 
 Write-Host ""
 Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
