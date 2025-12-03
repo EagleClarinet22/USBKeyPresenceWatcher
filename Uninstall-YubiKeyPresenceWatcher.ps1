@@ -101,3 +101,9 @@ try {
 catch {
     Write-Error "Failed to remove scheduled task '$TaskName': $($_.Exception.Message)"
 }
+
+if ($Host.Name -match "ConsoleHost") {
+    Write-Host ""
+    Write-Host "Completed. Press Enter to continue..."
+    [void][System.Console]::ReadLine()
+}

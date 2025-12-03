@@ -351,3 +351,9 @@ Write-Host "Scheduled task '$TaskName' registered successfully." -ForegroundColo
 
 Write-Host ""
 Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
+
+if ($Host.Name -match "ConsoleHost") {
+    Write-Host ""
+    Write-Host "Completed. Press Enter to continue..."
+    [void][System.Console]::ReadLine()
+}
