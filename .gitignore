@@ -2,6 +2,7 @@
 Task-USBKeyPresenceLock.xml
 DEBUG-Task-Resolved.xml
 release-notes.md
+RELEASE-CHEATSHEET.md
 # Usual suspects - feel free to edit as needed
 *.psd1
 *.psm1
