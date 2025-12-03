@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to USBKeyPresenceLock.ps1 are documented here.
+## [1.0.2] - 2025-12-03
+_minor tweak: Added support file distribution and automatic cleanup when uninstalling._
 
 ## [1.0.1] - 2025-12-03
 
