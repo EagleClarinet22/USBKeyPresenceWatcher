@@ -1,0 +1,83 @@
+name: Auto Hotfix Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  auto-hotfix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get last release tag
+        id: lasttag
+        run: |
+          # Get most recent non-hotfix tag
+          TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || echo "")
+          echo "last_tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Count commits since last release
+        id: commitcount
+        run: |
+          if [ -z "${{ steps.lasttag.outputs.last_tag }}" ]; then
+            COUNT=$(git rev-list --count HEAD)
+          else
+            COUNT=$(git rev-list --count ${{ steps.lasttag.outputs.last_tag }}..HEAD)
+          fi
+
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+      - name: Stop if commit count <= 3
+        if: ${{ steps.commitcount.outputs.count <= 3 }}
+        run: |
+          echo "Only ${{ steps.commitcount.outputs.count }} commits since last release. No hotfix needed."
+          exit 0
+
+      - name: Determine next hotfix tag
+        id: hotfixtag
+        run: |
+          BASE=${{ steps.lasttag.outputs.last_tag }}
+
+          # If no releases exist yet, use a base
+          if [ -z "$BASE" ]; then
+            BASE="v0.0.0"
+          fi
+
+          # Get existing hotfix tags for this base version
+          EXISTING=$(git tag | grep "^${BASE}-hotfix" || echo "")
+
+          if [ -z "$EXISTING" ]; then
+            NEXT="${BASE}-hotfix.1"
+          else
+            # Extract highest N from -hotfix.N
+            MAX=$(echo "$EXISTING" | sed -E 's/.*hotfix\.([0-9]+)$/\1/' | sort -n | tail -n 1)
+            NEXT="${BASE}-hotfix.$((MAX + 1))"
+          fi
+
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
+
+      - name: Create new hotfix tag
+        run: |
+          git tag "${{ steps.hotfixtag.outputs.tag }}"
+          git push origin "${{ steps.hotfixtag.outputs.tag }}"
+
+      - name: Create Hotfix Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.hotfixtag.outputs.tag }}
+          name: ${{ steps.hotfixtag.outputs.tag }}
+          body: |
+            Automatic hotfix release.
+            **Commits since last release:** ${{ steps.commitcount.outputs.count }}
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
