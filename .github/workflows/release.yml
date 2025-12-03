@@ -1,0 +1,48 @@
+name: Create Release on Tag
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Extract section from CHANGELOG.md that matches the tag
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+
+          echo "Looking for version: $VERSION"
+
+          # Extract the changelog section using awk
+          ENTRY=$(awk -v ver="$VERSION" '
+            BEGIN {found=0}
+            $0 ~ "^## \\[" ver "\\]" {found=1; next}
+            found && /^## \[/ {found=0}
+            found {print}
+          ' CHANGELOG.md)
+
+          # Escape GitHub multiline format
+          ENTRY="${ENTRY//'%'/'%25'}"
+          ENTRY="${ENTRY//$'\n'/'%0A'}"
+          ENTRY="${ENTRY//$'\r'/'%0D'}"
+
+          echo "entry=$ENTRY" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.entry }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
