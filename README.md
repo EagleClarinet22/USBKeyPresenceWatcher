@@ -17,7 +17,6 @@ This project includes:
 > ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).
 > PowerShell 7+ (pwsh.exe) is **not supported** for toast notifications, PnP enumeration, or hidden scheduled task windows.
 
-
 ### BurntToast Install Links
 [BurntToast - GitHub](https://github.com/Windos/BurntToast)
 
