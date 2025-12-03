@@ -329,3 +329,6 @@ Attribution is not required by the license, but it is encouraged.
 ---
 
 Happy locking! 🔐
+
+
+![GitHub Card](https://githubcard.com/EagleClarinet22.svg)
