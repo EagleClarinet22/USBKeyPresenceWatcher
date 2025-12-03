@@ -91,7 +91,12 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ---
 
-## 3. Run the installer
+## 3. Run the installer in Windows PowerShell (as Administrator)
+
+> Note: The installer will auto-elevate (UAC prompt) if required.> You may run it normally from Windows PowerShell and it will handle elevation automatically.
+
+If desired: Start key → Windows Powershell → Run as Administrator
+
 
 ```powershell
 .\Install-YubiKeyPresenceWatcher.ps1
@@ -107,6 +112,7 @@ Common flags:
 
 ```powershell
 # Change install directory
+__defaults to C:\Scripts\YubiKey__
 .\Install-YubiKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\YubiKeyPresenceWatcher'
 
 # Force replace existing files & scheduled task
