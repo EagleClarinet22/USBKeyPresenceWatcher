@@ -34,13 +34,13 @@ jobs:
         uses: actions/checkout@v4
 
       #####################################################################
-      # Step 2 — Print computed .gitattributes rules
+      # Step 2 — Show effective .gitattributes rules
       #####################################################################
       - name: Show effective .gitattributes rules
         run: git check-attr --all -- . | sort
 
       #####################################################################
-      # Step 3 — Validate XML encoding (must be UTF-16 LE/BE)
+      # Step 3 — Validate XML encoding (must be UTF-16)
       #####################################################################
       - name: Validate XML encoding requirements
         run: |
@@ -130,7 +130,7 @@ jobs:
           Write-Host "Running PSScriptAnalyzer..."
 
           # Use root-level settings file
-          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 
           if ($results) {
             $results | Format-Table
@@ -138,37 +138,44 @@ jobs:
             Write-Host "No PSScriptAnalyzer issues found."
           }
 
-          $errors = $results | Where-Object Severity -eq 'Error'
+          $errors   = $results | Where-Object Severity -eq 'Error'
           $warnings = $results | Where-Object Severity -eq 'Warning'
 
+          #################################################################
+          # Build Markdown Table Header (using a here-string)
+          #################################################################
+          $summary = @"
+          ### 🔍 PSScriptAnalyzer Results
+
+          | Severity | Rule | File | Line | Message |
+          |----------|------|-------|------|---------|
+          "@
 
           #################################################################
-          # Build Markdown Table Summary
+          # Add table rows
           #################################################################
-          $summary = "### 🔍 PSScriptAnalyzer Results`n"
-          $summary += "| Severity | Rule | File | Line | Message |\n"
-          $summary += "|----------|-------|-------|------|---------|\n"
-
           if ($results) {
             foreach ($r in $results) {
+              $sev  = $r.Severity
+              $rule = $r.RuleName
               $file = $r.ScriptPath
               $line = $r.Line
-              $rule = $r.RuleName
-              $sev  = $r.Severity
-              $msg  = $r.Message.Replace('|','`|')
+              $msg  = $r.Message.Replace("|","`|")
 
-              $summary += "| $sev | $rule | `$file | $line | $msg |\n"
+              $summary += "| $sev | $rule | `$file | $line | $msg |`n"
             }
-          } else {
-            $summary += "| ✔ No issues found |  |  |  |  |\n"
+          }
+          else {
+            $summary += "| ✔ No issues found | | | | |`n"
           }
 
-          # Add to GitHub Summary tab
+          #################################################################
+          # Write summary to GitHub Actions UI
+          #################################################################
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
 
-
           #################################################################
-          # Post PR Comment (table)
+          # Post PR comment
           #################################################################
           if ("${{ github.event_name }}" -eq "pull_request") {
             Write-Host "Posting PR comment..."
@@ -176,9 +183,8 @@ jobs:
               -f body="$summary"
           }
 
-
           #################################################################
-          # Fail ONLY on errors
+          # Fail only on errors
           #################################################################
           if ($errors) {
             Write-Error "PSScriptAnalyzer errors detected."
