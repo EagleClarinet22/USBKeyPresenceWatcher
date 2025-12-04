@@ -1,63 +1,61 @@
 ###############################################################################
 # Core settings
 ###############################################################################
-# Always use CRLF on Windows systems
+
+# Default: treat all files as text and normalize to CRLF on checkout
 * text eol=crlf
 
-# Auto-detect text vs binary, but do not modify binary line endings
+# Let GitHub linguist detect languages normally
 * linguist-detectable
-*.ps1 text
-*.psm1 text
-*.psd1 text
-*.xml text
-*.md  text
-*.txt text
 
-# The VBS script MUST be encoded using Windows-1252 (Western/ANSI). Preserve encoding by treating as binary.
+###############################################################################
+# PowerShell scripts (UTF-8 with CRLF)
+###############################################################################
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+###############################################################################
+# Documentation (LF preferred for GitHub)
+###############################################################################
+*.md     text eol=lf
+README.md text eol=lf
+LICENSE   text eol=lf
+# inherits global CRLF unless overridden
+*.txt     text
+
+###############################################################################
+# Windows Task Scheduler XML — MUST NOT BE MODIFIED
+###############################################################################
+# Prevent Git from normalizing or altering encoding.
+# These XML files must remain UTF-16 LE with BOM.
+*.xml -text
+
+# (Optional explicit pattern, redundant but allowed)
+Task-*.xml -text
+Task-YubiKeyPresenceLock.xml -text
+
+###############################################################################
+# VBS script — must stay Windows-1252/ANSI
+###############################################################################
 Launch-USBKeyWatcher.vbs binary
 
-
-# Treat images as binary so Git doesn’t try to diff/merge them
+###############################################################################
+# Images (always binary)
+###############################################################################
 *.png binary
 *.jpg binary
 *.ico binary
 
 ###############################################################################
-# UTF-16 XML Protection
-###############################################################################
-# The Task Scheduler XML **must** stay UTF-16 *exactly*, with no normalization.
-# If Git converts line endings incorrectly, the task import will break.
-# Mark XML task templates as "working-tree encoded" to prevent corruption.
-Task-*.xml -text
-
-# Or if the template name is fixed:
-Task-YubiKeyPresenceLock.xml -text
-
-###############################################################################
-# PowerShell script normalization
-###############################################################################
-# Normalize text files and enforce CRLF for Windows users
-*.ps1 text eol=crlf
-*.psm1 text eol=crlf
-*.psd1 text eol=crlf
-
-###############################################################################
-# Batch and command files
+# Batch scripts (CRLF)
 ###############################################################################
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
 ###############################################################################
-# Prevent execution bit inconsistencies
+# Prevent executable-bit inconsistencies
 ###############################################################################
-# On Windows this usually doesn’t matter, but helps cross-platform users
-*.ps1 -executable
+*.ps1  -executable
 *.psm1 -executable
 *.psd1 -executable
-
-###############################################################################
-# Documentation
-###############################################################################
-*.md text eol=lf
-README.md text eol=lf
-LICENSE text eol=lf

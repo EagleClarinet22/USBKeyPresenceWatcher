@@ -1,0 +1,108 @@
+name: Validate File Attributes
+
+on:
+  push:
+    paths:
+      - ".gitattributes"
+      - "**/*"
+  pull_request:
+    paths:
+      - ".gitattributes"
+      - "**/*"
+
+jobs:
+  validate-attributes:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print effective .gitattributes rules
+        run: |
+          echo "Active attribute rules:"
+          git check-attr --all -- . | sort
+
+      #####################################################################
+      # 1. Validate XML files (must be -text and UTF-16)
+      #####################################################################
+      - name: Validate XML rules
+        run: |
+          xml_files=$(git ls-files "*.xml" || true)
+
+          if [[ -z "$xml_files" ]]; then
+            echo "No XML files found."
+            exit 0
+          fi
+
+          for f in $xml_files; do
+            attr=$(git check-attr text -- "$f" | awk '{print $3}')
+
+            echo "File $f → text attribute: $attr"
+
+            if [[ "$attr" != "unset" ]]; then
+              echo "::error file=$f::Expected '-text' but attribute is '$attr'"
+              exit 1
+            fi
+
+            # Encoding check
+            encoding=$(file -bi "$f" | sed 's/.*charset=//')
+            if [[ "$encoding" != "utf-16le" && "$encoding" != "utf-16be" ]]; then
+              echo "::warning file=$f::XML is not UTF-16 ($encoding). Fix in VS Code using Save with Encoding → UTF-16 LE."
+              echo "::error file=$f::XML encoding invalid."
+              exit 1
+            fi
+          done
+
+      #####################################################################
+      # 2. Validate PowerShell line endings (CRLF)
+      #####################################################################
+      - name: Validate PowerShell line endings (CRLF)
+        run: |
+          ps_files=$(git ls-files "*.ps1" "*.psm1" "*.psd1" || true)
+
+          for f in $ps_files; do
+            if file "$f" | grep -q "CRLF"; then
+              echo "✔ $f has CRLF line endings"
+            else
+              echo "::error file=$f::PowerShell file must use CRLF line endings"
+              echo "Fix by running: dos2unix -c mac $f or resave in VS Code with CRLF"
+              exit 1
+            fi
+          done
+
+      #####################################################################
+      # 3. Validate Markdown uses LF
+      #####################################################################
+      - name: Validate Markdown line endings (LF)
+        run: |
+          md_files=$(git ls-files "*.md" || true)
+
+          for f in $md_files; do
+            if file "$f" | grep -q "CRLF"; then
+              echo "::error file=$f::Markdown must use LF, not CRLF"
+              echo "Fix by running: dos2unix $f or resave in VS Code with LF"
+              exit 1
+            else
+              echo "✔ $f uses LF"
+            fi
+          done
+
+      #####################################################################
+      # 4. Validate VBS is binary
+      #####################################################################
+      - name: Validate VBS encoding
+        run: |
+          if [[ -f "Launch-USBKeyWatcher.vbs" ]]; then
+            attr=$(git check-attr binary -- Launch-USBKeyWatcher.vbs | awk '{print $3}')
+            if [[ "$attr" != "set" ]]; then
+              echo "::error file=Launch-USBKeyWatcher.vbs::VBS must be marked as binary"
+              exit 1
+            fi
+          fi
+
+      #####################################################################
+      # Done
+      #####################################################################
+      - name: All checks passed
+        run: echo "✔ All .gitattributes rules validated successfully"
