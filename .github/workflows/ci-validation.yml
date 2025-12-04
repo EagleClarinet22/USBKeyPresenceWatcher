@@ -8,7 +8,7 @@ on:
       - "**/*.psd1"
       - "**/*.xml"
       - ".gitattributes"
-      - "internal-docs/PSScriptAnalyzerSettings.psd1"
+      - "PSScriptAnalyzerSettings.psd1"
   push:
     paths:
       - "**/*.ps1"
@@ -16,7 +16,7 @@ on:
       - "**/*.psd1"
       - "**/*.xml"
       - ".gitattributes"
-      - "internal-docs/PSScriptAnalyzerSettings.psd1"
+      - "PSScriptAnalyzerSettings.psd1"
 
 permissions:
   contents: read
@@ -74,7 +74,9 @@ jobs:
       # Step 4 — Validate XML structure
       #####################################################################
       - name: Install xmllint (libxml2-utils)
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: |
+          sudo apt-get update -y >/dev/null 2>&1
+          sudo apt-get install -y libxml2-utils >/dev/null 2>&1
 
       - name: Validate XML structure with xmllint
         run: |
@@ -118,11 +120,7 @@ jobs:
           done
 
       #####################################################################
-      # Step 7 — Run PSScriptAnalyzer
-      # - Custom settings file
-      # - Markdown summary
-      # - PR comment
-      # - Fail only on errors
+      # Step 7 — Run PSScriptAnalyzer with Table Summary + PR Comment
       #####################################################################
       - name: Run PSScriptAnalyzer with summary + PR comment
         shell: pwsh
@@ -131,6 +129,7 @@ jobs:
         run: |
           Write-Host "Running PSScriptAnalyzer..."
 
+          # Use root-level settings file
           $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
 
           if ($results) {
@@ -144,39 +143,37 @@ jobs:
 
 
           #################################################################
-          # Build Markdown Summary
+          # Build Markdown Table Summary
           #################################################################
-          $summary = "# 🔍 PSScriptAnalyzer Results`n"
+          $summary = "### 🔍 PSScriptAnalyzer Results`n"
+          $summary += "| Severity | Rule | File | Line | Message |\n"
+          $summary += "|----------|-------|-------|------|---------|\n"
 
-          if ($errors) {
-            $summary += "## ❌ Errors (Build Failed)`n"
-            foreach ($e in $errors) {
-              $summary += "- **$($e.RuleName)** — $($e.Message) *(File: `$($e.ScriptPath)`, Line: $($e.Line))*`n"
+          if ($results) {
+            foreach ($r in $results) {
+              $file = $r.ScriptPath
+              $line = $r.Line
+              $rule = $r.RuleName
+              $sev  = $r.Severity
+              $msg  = $r.Message.Replace('|','`|')
+
+              $summary += "| $sev | $rule | `$file | $line | $msg |\n"
             }
+          } else {
+            $summary += "| ✔ No issues found |  |  |  |  |\n"
           }
 
-          if ($warnings) {
-            $summary += "`n## ⚠ Warnings (Non-blocking)`n"
-            foreach ($w in $warnings) {
-              $summary += "- **$($w.RuleName)** — $($w.Message) *(File: `$($w.ScriptPath)`, Line: $($w.Line))*`n"
-            }
-          }
-
-          if (-not $errors -and -not $warnings) {
-            $summary += "✔ No issues found!"
-          }
-
-          # Add to GitHub Summary UI
+          # Add to GitHub Summary tab
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
 
 
           #################################################################
-          # Post PR Comment
+          # Post PR Comment (table)
           #################################################################
           if ("${{ github.event_name }}" -eq "pull_request") {
             Write-Host "Posting PR comment..."
-            $body = $summary.Replace("`n", "\n")
-            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -f body="$body"
+            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments `
+              -f body="$summary"
           }
 
 
