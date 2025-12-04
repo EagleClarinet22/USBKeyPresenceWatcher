@@ -1,40 +1,49 @@
 ###############################################################################
-# YubiKeyPresenceWatcher Project .gitignore
-# Organized and safe for PowerShell + Windows + installer workflows
+# YubiKeyPresenceWatcher Project Gitignore
 ###############################################################################
 
-###############################################################################
 # Installer-generated / project-generated files
-###############################################################################
-# Ignore runtime-created task XML files (resolved/expanded)
-Task-*.xml
+# These should not be tracked unless explicitly intended.
+Task-USBKeyPresenceLock.xml
 DEBUG-Task-Resolved.xml
-
-# Internal docs or scratch space
 internal-docs/
-
 ###############################################################################
-# PowerShell script project temp files
+# Script build artifacts
 ###############################################################################
 *.log
 *.bak
 *.tmp
 *.old
-*.cache
-*.psc1
 
-# PowerShell history
+###############################################################################
+# Filetypes that are unsupported by Prettier (fallsback to VS Code for these)
+###############################################################################
+*.ps1
+*.psm1
+*.psd1
+*.cmd
+*.bat
+*.reg
+*.ini
+*.cfg
+
+# PowerShell histories and temp files
 ConsoleHost_history.txt
 *.pshistory
 
 ###############################################################################
-# Critical XML templates
-# Do NOT ignore the real template used for scheduled task generation.
+# Task Scheduler XML Templates (Protect encoding!)
+# NOTE: These are CRITICAL files — DO NOT IGNORE your template XML,
+# but DO ignore auto-generated/resolved copies.
 ###############################################################################
-!Template-USBKeyPresenceLock.xml
+# Do NOT ignore the real template:
+!Template-YubiKeyPresenceLock.xml
+
+# But DO ignore temporary / resolved variants created by installer/debug
+task-*.xml
 
 ###############################################################################
-# Event Log exports (optional)
+# Event Log exports (if you generate them)
 ###############################################################################
 *.evtx
 
@@ -46,20 +55,16 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Windows Zone Identifier streams
-*:*Zone.Identifier
-
-###############################################################################
-# Cloud sync / editor clutter
-###############################################################################
+# OneDrive cloud junk
 *.lnk
-.synctex.gz
+*.tmp
 *~
+*.synctex.gz
 
 ###############################################################################
 # Binary assets
 ###############################################################################
-# Prevent Git diffs on binary images/icons
+# Prevent Git from attempting text diffs on images/icons.
 *.png
 *.ico
 *.jpg
@@ -76,23 +81,19 @@ $RECYCLE.BIN/
 *.gz
 
 ###############################################################################
-# Node (if ever used)
+# Node (if ever added)
 ###############################################################################
 node_modules/
 
 ###############################################################################
-# VS Code workspace (optional)
+# Tooling configuration
 ###############################################################################
+# VS Code workspace files (optional)
 .vscode/
 
 ###############################################################################
-# Ensure critical project files are ALWAYS tracked
+# Do NOT ignore these project-critical items
 ###############################################################################
-!*.ps1
-!*.vbs
 !*.xml
 !*.md
-!.editorconfig
-!.gitattributes
 !LICENSE
-!NOTICE

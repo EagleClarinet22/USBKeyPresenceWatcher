@@ -3,7 +3,7 @@
   <RegistrationInfo>
     <Author>__USERNAME__</Author>
     <Description>Locks workstation if the selected security device is removed</Description>
-    <URI>\YubiKey Presence Lock</URI>
+    <URI>\USB Key Presence Lock</URI>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -45,11 +45,11 @@
     <Priority>7</Priority>
   </Settings>
   <Actions Context="Author">
-    <Exec>
-      <Command>powershell.exe</Command>
-      <Arguments>-WindowStyle Hidden -ExecutionPolicy Bypass -File "__SCRIPT_PATH__"</Arguments>
-      <WorkingDirectory>__WORK_DIR__</WorkingDirectory>
-    </Exec>
+      <Exec>
+        <Command>wscript.exe</Command>
+        <Arguments>"__VBS_PATH__"</Arguments>
+        <WorkingDirectory>__WORK_DIR__</WorkingDirectory>
+      </Exec>
   </Actions>
 </Task>
 

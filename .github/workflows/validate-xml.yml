@@ -1,0 +1,108 @@
+name: Validate Task XML
+
+on:
+  push:
+    paths:
+      - "*.xml"
+  pull_request:
+    paths:
+      - "*.xml"
+
+jobs:
+  validate-xml:
+    runs-on: ubuntu-latest
+
+    steps:
+    #####################################################################
+    # Step 1 — Checkout Repo
+    #####################################################################
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+
+    #####################################################################
+    # Step 2 — Locate XML Files
+    #####################################################################
+    - name: Locate XML files
+      id: xml_list
+      run: |
+        files=$(ls *.xml 2>/dev/null || true)
+
+        if [[ -z "$files" ]]; then
+          echo "::error::No XML files found to validate."
+          exit 1
+        fi
+
+        echo "Found XML files:"
+        echo "$files"
+
+        # store list as output for later steps
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        echo "$files" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+
+    #####################################################################
+    # Step 3 — Validate Encoding (Must Be UTF-16)
+    #####################################################################
+    - name: Validate XML encoding (UTF-16 required)
+      run: |
+        for file in ${{ steps.xml_list.outputs.files }}; do
+          encoding=$(file -bi "$file" | sed 's/.*charset=//')
+          
+          echo "Checking encoding for $file → $encoding"
+
+          if [[ "$encoding" != "utf-16le" && "$encoding" != "utf-16be" ]]; then
+            echo "::error file=$file::Invalid encoding ($encoding). Task XML must be UTF-16."
+            exit 1
+          fi
+
+          echo "✔ $file encoding OK (UTF-16)"
+        done
+
+
+    #####################################################################
+    # Step 4 — Sanitize placeholders
+    #####################################################################
+    - name: Create sanitized XML copies (placeholder-safe)
+      run: |
+        rm -f sanitized-* || true
+
+        for file in ${{ steps.xml_list.outputs.files }}; do
+          echo "Sanitizing placeholders in $file"
+
+          sed \
+            -e 's|__SCRIPT_PATH__|C:/Dummy/Path.ps1|g' \
+            -e 's|__WORK_DIR__|C:/Dummy|g' \
+            -e 's|__USERNAME__|DummyUser|g' \
+            -e 's|__USERNAME_SID__|S-1-5-21-0000000000-0000000000-0000000000-1001|g' \
+            "$file" > "sanitized-$file"
+
+          echo "✔ Created sanitized-$file"
+        done
+
+
+    #####################################################################
+    # Step 5 — Validate XML Structure
+    #####################################################################
+    - name: Validate XML structure using xmllint
+      run: |
+        for file in sanitized-*; do
+          echo "Validating structure: $file"
+          
+          xmllint --noout "$file"
+          if [[ $? -ne 0 ]]; then
+            echo "::error file=$file::Malformed XML."
+            exit 1
+          fi
+
+          echo "✔ Structure OK: $file"
+        done
+
+
+    #####################################################################
+    # Step 6 — Clean up
+    #####################################################################
+    - name: Cleanup sanitized files
+      if: always()
+      run: rm -f sanitized-* || true

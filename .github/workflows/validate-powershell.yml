@@ -1,0 +1,66 @@
+name: Validate PowerShell Scripts
+
+on:
+  push:
+    paths:
+      - "**/*.ps1"
+      - "**/*.psm1"
+  pull_request:
+    paths:
+      - "**/*.ps1"
+      - "**/*.psm1"
+
+jobs:
+  lint-powershell:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    ##################################################################
+    # Step 1 — Verify pwsh is available on the runner
+    ##################################################################
+    - name: Confirm PowerShell availability
+      run: pwsh -NoLogo -Command '$PSVersionTable'
+
+    ##################################################################
+    # Step 2 — Install PSScriptAnalyzer
+    ##################################################################
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+    ##################################################################
+    # Step 3 — Syntax Validation (Compile each script)
+    ##################################################################
+    - name: Validate PowerShell syntax
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Recurse -Include *.ps1, *.psm1
+        foreach ($file in $files) {
+          Write-Host "Checking syntax: $file"
+          try {
+            pwsh -NoLogo -NoProfile -Command "Invoke-Expression (Get-Content -Raw '$file')" 2>$null
+          } catch {
+            Write-Error "Syntax error in $file"
+            exit 1
+          }
+        }
+        Write-Host "✔ Syntax validation passed"
+
+    ##################################################################
+    # Step 4 — PSScriptAnalyzer rules validation
+    ##################################################################
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error, Warning
+        if ($results.Count -gt 0) {
+          Write-Host "::error::PowerShell Analyzer found issues:"
+          $results | Format-Table
+          exit 1
+        } else {
+          Write-Host "✔ No analyzer issues found"
+        }

@@ -1,0 +1,63 @@
+###############################################################################
+# Core settings
+###############################################################################
+# Always use CRLF on Windows systems
+* text eol=crlf
+
+# Auto-detect text vs binary, but do not modify binary line endings
+* linguist-detectable
+*.ps1 text
+*.psm1 text
+*.psd1 text
+*.xml text
+*.md  text
+*.txt text
+
+# The VBS script MUST be encoded using Windows-1252 (Western/ANSI). Preserve encoding by treating as binary.
+Launch-USBKeyWatcher.vbs binary
+
+
+# Treat images as binary so Git doesn’t try to diff/merge them
+*.png binary
+*.jpg binary
+*.ico binary
+
+###############################################################################
+# UTF-16 XML Protection
+###############################################################################
+# The Task Scheduler XML **must** stay UTF-16 *exactly*, with no normalization.
+# If Git converts line endings incorrectly, the task import will break.
+# Mark XML task templates as "working-tree encoded" to prevent corruption.
+Task-*.xml -text
+
+# Or if the template name is fixed:
+Task-YubiKeyPresenceLock.xml -text
+
+###############################################################################
+# PowerShell script normalization
+###############################################################################
+# Normalize text files and enforce CRLF for Windows users
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+###############################################################################
+# Batch and command files
+###############################################################################
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+###############################################################################
+# Prevent execution bit inconsistencies
+###############################################################################
+# On Windows this usually doesn’t matter, but helps cross-platform users
+*.ps1 -executable
+*.psm1 -executable
+*.psd1 -executable
+
+###############################################################################
+# Documentation
+###############################################################################
+*.md text eol=lf
+README.md text eol=lf
+LICENSE text eol=lf
