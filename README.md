@@ -1,8 +1,13 @@
 # YubiKey Presence Lock for Windows
+
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue)
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6)
+![Automation](https://img.shields.io/badge/Scheduled%20Task-Automated-green)
+![BurntToast](https://img.shields.io/badge/Toast%20Notifications-BurntToast-orange)
+![Version](https://img.shields.io/github/v/tag/EagleClarinet22/USBKeyPresenceWatcher?label=version)
 
-Automatically lock your Windows session when your YubiKey (or *any* chosen USB device) is removed - and keep the system locked until that device is reinserted.
+Automatically lock your Windows session when your YubiKey (or _any_ chosen USB device) is removed — and keep the system locked until that device is reinserted.
 
 This project includes:
 
@@ -10,67 +15,336 @@ This project includes:
 - Toast notifications via BurntToast (optional)
 - A Windows Scheduled Task to start the watcher automatically
 - Event Viewer logging (with file fallback)
-- A fully interactive **installer** that detects your USB devices and lets you choose which one to monitor
-- A matching **uninstaller** to cleanly remove the scheduled task
-- A self-elevating install/uninstall flow (prompts for admin if needed)
+- A fully interactive **installer** that detects your USB devices
+- A matching **uninstaller**
+- A clean, self-elevating installation workflow
 
-> ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).
-> PowerShell 7+ (pwsh.exe) is **not supported** for toast notifications, PnP enumeration, or hidden scheduled task windows.
-
-### BurntToast Install Links
-[BurntToast - GitHub](https://github.com/Windos/BurntToast)
-
-[BurntToast - PSGallery](https://www.powershellgallery.com/packages/BurntToast/1.1.0)
+> ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).  
+> PowerShell 7+ (pwsh.exe) is **not supported** for hidden scheduled-task execution, PnP APIs, or BurntToast.
 
 ---
 
 ## ✨ Features
 
-### 🔐 Presence-based security  
-Your workstation locks itself automatically when your selected USB device disappears - and keeps the system locked until the device returns.
+### 🔐 Presence-based security
 
-### 🔁 Persistent lock enforcement  
-If unlocked manually while your device is missing, the watcher re-locks the workstation instantly.
+Locks your workstation automatically when your selected USB device disappears — and keeps it locked until the device returns.
 
-### 🔔 Toast notifications  
-Optional (BurntToast module):
+### 🔁 Persistent lock enforcement
+
+If you manually unlock your workstation while the device is missing, the watcher immediately re-locks it.
+
+### 🔔 Toast notifications
+
+(Requires BurntToast)
 
 - Monitoring started
 - Device removed
 - Device reinserted
 
-### 🧱 Hub-resilience  
-Prevents false locks caused by USB hub power blips.  
-(Default: requires “2 consecutive misses” before locking.)
+### 🧱 Hub-resilience
 
-### 🗂 Automatic Event Viewer logging  
-All activity is logged under:
-- Log: **Application**
-- Source: **YubiKeyPresenceWatcher**
+Prevents false positives from USB hub glitches (default: **2 consecutive misses** required to lock).
 
-### 🧩 Smart installer workflow  
+### 🗂 Automatic Event Viewer logging
+
+Log: **Application**  
+Source: **YubiKeyPresenceWatcher**
+
+### 🧩 Smart installer workflow
+
 The installer:
 
-- Detects all USB devices containing a VID/PID
-- Lets you select the YubiKey (or any desired USB device)
-- Extracts the correct `VID_XXXX&PID_YYYY`
-- Updates only the *installed* script (never your repo version)
-- Hardens the install directory ACLs
+- Detects all USB devices with VID/PID
+- Lets you choose the correct YubiKey or token
+- Patches the installed script with your VID/PID
+- Hardens directory ACLs
 - Creates the EventLog source
-- Generates a runtime task XML file:  
-  - `Template-YubiKeyPresenceLock.xml` → `Task-YubiKeyPresenceLock.xml`
-- Registers the Scheduled Task
+- Generates a runtime task XML:
 
-Your repo stays clean - only the generated XML is ignored using `.gitignore`.
+```
+Template-USBKeyPresenceLock.xml → Task-USBKeyPresenceLock.xml
+```
 
-### 🔒 Secure installation directory  
-The installer assigns FullControl to:
+Your repo stays clean — only runtime output is ignored.
+
+### 🔒 Secure installation directory
+
+Installer grants FullControl to:
 
 - The current user
 - SYSTEM
 - Administrators
 
-All others are removed.
+All others removed.
+
+---
+
+# 📁 Repository Structure
+
+<details>
+<summary><strong>Click here to view repo structure</strong></summary>
+
+The **USBKeyPresenceWatcher** project consists of a PowerShell-based security watcher, a hidden-process launcher, an installer and uninstaller, and a Windows Task Scheduler template.
+
+```
+USBKeyPresenceWatcher/
+│
+│   Install-USBKeyPresenceWatcher.ps1
+│   Uninstall-USBKeyPresenceWatcher.ps1
+│   USBKeyPresenceLock.ps1
+│   Launch-USBKeyPresenceWatcher.vbs
+│   Template-USBKeyPresenceLock.xml
+│   lock_toast_64.png
+│
+│   CHANGELOG.md
+│   README.md
+│   LICENSE
+│   NOTICE
+│
+│   .editorconfig
+│   .gitattributes
+│   .gitignore
+│   .prettierignore
+│
+└── .github/
+    └── workflows/
+            auto-hotfix.yml
+            auto-nightly.yml
+            release.yml
+            validate-powershell.yml
+            validate-xml.yml
+```
+
+</details>
+
+---
+
+# ⚙ How It Works Internally
+
+This section provides a technical overview of the system for maintainers and advanced users.
+
+### 1. **Task Scheduler Startup**
+
+The installer registers a scheduled task configured to run:
+
+- At user logon
+- On session unlock
+
+The task launches:
+
+```
+wscript.exe Launch-USBKeyPresenceWatcher.vbs
+```
+
+The VBS wrapper silently launches:
+
+```
+powershell.exe -WindowStyle Hidden -File USBKeyPresenceLock.ps1
+```
+
+Ensuring **no console window appears**.
+
+---
+
+### 2. **USB Device Detection**
+
+The watcher polls the system once per second:
+
+```powershell
+Get-PnpDevice -PresentOnly | Where-Object InstanceId -like "*VID_1050&PID_0407*"
+```
+
+A missing device increments a counter.  
+A present device resets it.
+
+Only after **N consecutive misses** is the workstation locked.
+
+---
+
+### 3. **Locking Logic**
+
+When the threshold is reached:
+
+```powershell
+rundll32.exe user32.dll,LockWorkStation
+```
+
+While locked, a heartbeat log entry is emitted periodically (disabled or adjustable).
+
+---
+
+### 4. **Single Instance Control**
+
+A mutex prevents multiple simultaneous watchers:
+
+```
+USBKeyPresenceWatcher_<USERNAME>
+```
+
+This prevents duplicate tasks from triggering overlapping watchers.
+
+---
+
+### 5. **Event Logging + Toasts**
+
+Logs are written to:
+
+- **Event Viewer** (if source exists)
+- Else to a local log file
+
+Notifications are sent via BurntToast if installed.
+
+---
+
+### 6. **Uninstallation**
+
+The uninstaller:
+
+- Terminates running wscript.exe / powershell.exe watcher instances
+- Removes the scheduled task
+- Deletes the installation directory
+- Supports `-WhatIf`
+
+A full clean removal is guaranteed.
+
+---
+
+# 🔧 Core Scripts
+
+### `Install-USBKeyPresenceWatcher.ps1`
+
+Handles installation of the watcher system:
+
+- Copies required files into the installation directory
+- Applies ACL hardening
+- Resolves placeholders in the XML template
+- Registers or updates the Scheduled Task
+- Supports debug XML generation
+
+---
+
+### `Uninstall-USBKeyPresenceWatcher.ps1`
+
+Safely removes the watcher:
+
+- Terminates running watcher instances (VBS/PowerShell)
+- Removes the Scheduled Task
+- Wipes the installation directory
+- Supports `-WhatIf` testing
+
+---
+
+### `USBKeyPresenceLock.ps1`
+
+The main watcher daemon responsible for:
+
+- Detecting presence of the configured USB security key
+- Locking the workstation when the device is removed
+- Logging to Event Viewer or fall back log file
+- Displaying toast notifications via BurntToast
+- Ensuring only a single instance runs (mutex)
+
+---
+
+### `Launch-USBKeyPresenceWatcher.vbs`
+
+A VBS launcher that:
+
+- Runs the watcher script **fully hidden**
+- Ensures execution occurs under the interactive user session
+- Prevents PowerShell console windows from appearing
+
+---
+
+### `Template-USBKeyPresenceLock.xml`
+
+Task Scheduler XML template containing:
+
+- Script path
+- Working directory
+- User SID
+- Run conditions
+
+---
+
+### `lock_toast_64.png`
+
+Icon used in toast notifications via BurntToast.
+
+---
+
+## 📄 Project Metadata
+
+### `CHANGELOG.md`
+
+The version history of the project.  
+Also used by GitHub Actions to generate release notes.
+
+### `README.md`
+
+User-facing documentation, setup instructions, and overview of the project.
+
+### `LICENSE` / `NOTICE`
+
+Legal files for distribution and attribution.
+
+---
+
+## ⚙ Configuration
+
+### `.editorconfig`
+
+Enforces consistent formatting and encoding:
+
+- CRLF for PowerShell
+- ANSI for VBS
+- UTF-8 rules for other text files
+- Prevents editors from breaking encoding-sensitive scripts
+
+---
+
+### `.gitattributes`
+
+Defines how Git handles:
+
+- Binary/text detection
+- Line-ending normalization
+- Encoding stability (especially for VBS)
+
+---
+
+### `.gitignore`
+
+Specifies which local files and build artifacts should be excluded from version control.
+
+### `.prettierignore`
+
+Specifies which files Prettier must **not** format.
+
+---
+
+## 🤖 GitHub Workflows (`.github/workflows/`)
+
+### `validate-powershell.yml`
+
+Runs PSScriptAnalyzer to ensure correct PowerShell formatting and syntax.
+
+### `validate-xml.yml`
+
+Ensures task XML files remain valid and well-formed.
+
+### `release.yml`
+
+Automatically generates GitHub Releases from tagged versions, pulling notes from `CHANGELOG.md`.
+
+### `auto-hotfix.yml`
+
+Automates creation of hotfix releases based on commit activity.
+
+### `auto-nightly.yml`
+
+Builds nightly development releases.
 
 ---
 
@@ -82,8 +356,6 @@ All others are removed.
 git clone https://github.com/<your-username>/<your-repo>.git
 cd <your-repo>
 ```
-
-Or download and extract the ZIP.
 
 ---
 
@@ -97,10 +369,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ## 3. Run the installer in Windows PowerShell (as Administrator)
 
-> Note: The installer will auto-elevate (UAC prompt) if required.> You may run it normally from Windows PowerShell and it will handle elevation automatically.
-
-If desired: Start key → Windows Powershell → Run as Administrator
-
+> Note: The installer will auto-elevate (UAC prompt) if required. You may run it normally from Windows PowerShell and it will handle elevation automatically.
 
 ```powershell
 .\Install-USBKeyPresenceWatcher.ps1
@@ -112,120 +381,72 @@ To see options:
 .\Install-USBKeyPresenceWatcher.ps1 -Help
 ```
 
-Common flags:
-
-```powershell
-# Change install directory
-# defaults to C:\Scripts\USBKeyPresenceWatcher-Install
-.\Install-USBKeyPresenceWatcher.ps1 -InstallDir 'C:\Scripts\USBKey'
-
-# Force replace existing files & scheduled task
-.\Install-USBKeyPresenceWatcher.ps1 -Force
-
-# Skip device picker and supply a known VID/PID
-.\Install-USBKeyPresenceWatcher.ps1 -YubiPrefix 'VID_1050&PID_0407'
-
-# Output DEBUG-Task-Resolved.xml for troubleshooting
-.\Install-USBKeyPresenceWatcher.ps1 -DebugXml
-
-# Preview what would be installed (no changes made)
-.\Install-USBKeyPresenceWatcher.ps1 -WhatIf
-```
-
-### What gets installed
-
-The installer copies the following files to your install directory:
-
-- `USBKeyPresenceLock.ps1` - The main watcher script
-- `Template-USBKeyPresenceLock.xml` - Task scheduler template (used to generate the runtime XML)
-- `Uninstall-USBKeyPresenceWatcher.ps1` - Uninstall script (for clean removal)
-- `lock_toast_64.png` - Icon for toast notifications
-- `LICENSE` - MIT license
-- `NOTICE` - Attribution notice
-- `README.md` - This documentation
-- `Task-USBKeyPresenceLock.xml` - Generated at runtime (user and SID-specific)
-
 ---
 
 ## 4. Choose your USB device
 
-The installer lists every detected USB device containing a VID/PID, for example:
+The installer lists every detected USB device containing a VID/PID.
 
-```
-[0] YubiKey OTP+FIDO+CCID
-     USB\VID_1050&PID_0407\...
+Then it:
 
-[1] USB Receiver
-     USB\VID_046D&PID_C534\...
-```
-
-Type the number shown, or press:
-
-- `M` - manually enter a VID/PID such as `VID_1050&PID_0407`
-
-The installer then:
-
-- Copies files into the install folder  
-- Patches the installed script with your VID/PID  
-- Hardens ACLs  
-- Creates the EventLog source  
-- Generates `Task-YubiKeyPresenceLock.xml`  
-- Registers the scheduled task  
-
-The `Template-YubiKeyPresenceLock.xml` file in your repo **is never modified**.
+- Copies files into the install folder
+- Patches the installed script
+- Hardens ACLs
+- Creates the EventLog source
+- Generates `Task-USBKeyPresenceLock.xml`
+- Registers the scheduled task
 
 ---
 
 # 🔧 Configuration
 
-## Change which device is monitored  
-Re-run the installer:
+### Change which device is monitored
 
 ```powershell
 .\Install-YubiKeyPresenceWatcher.ps1 -Force
 ```
 
-This regenerates:
-
-- The patched installed script  
-- The resolved task XML  
-- The scheduled task  
-
 ---
 
-## Hub-resilience tuning  
-In the **installed** script (not the repo copy):
+### Hub-resilience tuning
+
+In the installed script:
 
 ```powershell
 $missingThreshold = 2
 ```
 
-Higher values (e.g., 3–4) improve stability on noisy USB hubs.
-
 ---
 
 # ❓ FAQ
 
-### Do I need my VID/PID?  
-No - the installer detects options automatically.
+<details>
+<summary><strong>Click to expand FAQ</strong></summary>
 
-### Does this replace login authentication?  
-No - this only **locks** your session based on device presence.
+### Do I need my VID/PID?
 
-### Does this work with Windows Hello PIN?  
-Yes. It enforces presence *after* login.
+No — the installer detects options automatically.
 
-### Do I need BurntToast?  
-No - toast notifications are optional.
+### Does this replace authentication?
 
-### Why Windows PowerShell instead of PowerShell 7+?  
-Scheduled tasks using hidden windows + BurntToast + PnpDevice require Windows PowerShell 5.1.
+No — it only **locks** based on device presence.
+
+### Does this work with Windows Hello PIN?
+
+Yes.
+
+### Why Windows PowerShell instead of PowerShell 7+?
+
+BurntToast, PnP APIs, and hidden scheduled task execution require PS 5.1.
+
+</details>
 
 ---
 
 # 🛠 Troubleshooting
 
-### No toast notifications  
+### No toast notifications
+
 Install BurntToast:
 
 ```powershell
@@ -234,113 +455,36 @@ Install-Module BurntToast -Scope CurrentUser
 
 Ensure:
 
-- Task runs as the logged-in user  
-- “Run only when user is logged on” is enabled  
-
----
-
-### Presence lock not triggering  
-Check Event Viewer:
-
-```
-Windows Logs → Application → Source: YubiKeyPresenceWatcher
-```
-
-You should see entries such as:
-
-- YubiKey missing
-- Countdown in progress
-- Locking workstation
-
----
-
-### Scheduled Task fails to register  
-Common causes:
-
-- Elevation denied (UAC prompt declined)
-- Modified/corrupt XML
-- Execution policy blocking script
-
-Re-run with:
-
-```powershell
-.\Install-YubiKeyPresenceWatcher.ps1 -Force
-```
+- Task runs as the logged-in user
+- “Run only when user is logged on” is enabled
 
 ---
 
 # 🧹 Uninstallation
 
-## Recommended: Use the uninstaller script
-
-The uninstall script is included in your install directory:
-
-```powershell
-C:\Scripts\USBKeyPresenceWatcher-Install\Uninstall-USBKeyPresenceWatcher.ps1
-```
-
-Or from the repo:
+### Recommended
 
 ```powershell
 .\Uninstall-USBKeyPresenceWatcher.ps1
 ```
 
-For options:
+Supports:
 
-```powershell
-.\Uninstall-USBKeyPresenceWatcher.ps1 -Help
-```
-
-This will automatically:
-
-- Auto-elevate itself if needed  
-- Stop the running task  
-- Delete the scheduled task  
-- **Remove all files in the installation directory**
-- **Remove the installation directory itself**
-
-If you used a custom task name:
-
-```powershell
-.\Uninstall-USBKeyPresenceWatcher.ps1 -TaskName "My Custom Task"
-```
-
-To preview what would be removed without making changes:
-
-```powershell
-.\Uninstall-USBKeyPresenceWatcher.ps1 -WhatIf
-```
-
----
-
-## Manual uninstall (advanced)
-
-```powershell
-Unregister-ScheduledTask -TaskName "USB Key Presence Watcher" -Confirm:$false
-```
-
-Delete the install directory (default):
-
-```
-C:\Scripts\USBKeyPresenceWatcher-Install
-```
-
-(Optional) Remove the EventLog source:
-
-```powershell
-Remove-EventLog -Source USBKeyPresenceWatcher
-```
+- Auto-elevation
+- Task removal
+- Directory cleanup
+- `-WhatIf`
 
 ---
 
 # 🤝 Contributing
 
-Pull requests are welcome.  
+Pull requests are welcome!  
 If reporting issues, please include:
 
-- Windows version  
-- Device VID/PID  
-- Events from Event Viewer  
+- Windows version
+- Device VID/PID
+- Events from Event Viewer
 
 ---
 
@@ -358,10 +502,8 @@ work, attribution to the original author is appreciated:
 
 Attribution is not required by the license, but it is encouraged.
 
-
 ---
 
 Happy locking! 🔐
-
 
 ![GitHub Card](https://githubcard.com/EagleClarinet22.svg)

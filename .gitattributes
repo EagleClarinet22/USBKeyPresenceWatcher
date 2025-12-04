@@ -1,0 +1,61 @@
+###############################################################################
+# Core settings
+###############################################################################
+
+# Default: treat all files as text and normalize to CRLF on checkout
+* text eol=crlf
+
+# Let GitHub linguist detect languages normally
+* linguist-detectable
+
+###############################################################################
+# PowerShell scripts (UTF-8 with CRLF)
+###############################################################################
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+###############################################################################
+# Documentation (LF preferred for GitHub)
+###############################################################################
+*.md     text eol=lf
+README.md text eol=lf
+LICENSE   text eol=lf
+# inherits global CRLF unless overridden
+*.txt     text
+
+###############################################################################
+# Windows Task Scheduler XML — MUST NOT BE MODIFIED
+###############################################################################
+# Prevent Git from normalizing or altering encoding.
+# These XML files must remain UTF-16 LE with BOM.
+*.xml -text
+
+# (Optional explicit pattern, redundant but allowed)
+Task-*.xml -text
+Task-YubiKeyPresenceLock.xml -text
+
+###############################################################################
+# VBS script — must stay Windows-1252/ANSI
+###############################################################################
+Launch-USBKeyWatcher.vbs binary
+
+###############################################################################
+# Images (always binary)
+###############################################################################
+*.png binary
+*.jpg binary
+*.ico binary
+
+###############################################################################
+# Batch scripts (CRLF)
+###############################################################################
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+###############################################################################
+# Prevent executable-bit inconsistencies
+###############################################################################
+*.ps1  -executable
+*.psm1 -executable
+*.psd1 -executable

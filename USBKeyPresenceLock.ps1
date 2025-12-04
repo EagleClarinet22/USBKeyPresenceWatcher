@@ -19,7 +19,7 @@ param(
 # with $PSCmdlet available, prefer its ShouldProcess so built-in -WhatIf/-Confirm
 # works. Otherwise emulate WhatIf behavior via the script-level -WhatIf switch or
 # the automatic $WhatIfPreference variable.
-[void] # Removed CmdletBinding to avoid parser issues in some PowerShell hosts; using emulation instead.
+# TODO: Removed CmdletBinding to avoid parser issues in some PowerShell hosts; using emulation instead.
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 function ShouldPerform {
     param(
@@ -68,7 +68,7 @@ $iconPath = Join-Path $ScriptRoot "lock_toast_64.png"
 
 # Event Log config
 $eventLogName = "Application"
-$eventSource  = "USBKeyPresenceWatcher"
+$eventSource = "USBKeyPresenceWatcher"
 # ----------------------------
 
 $ErrorActionPreference = "Stop"
@@ -84,7 +84,8 @@ $eventLogAvailable = $false
 
 try {
     $eventLogAvailable = [System.Diagnostics.EventLog]::SourceExists($eventSource)
-} catch {
+}
+catch {
     $eventLogAvailable = $false
 }
 
@@ -92,7 +93,8 @@ try {
 if (-not $eventLogAvailable) {
     try {
         $isElevated = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch {
+    }
+    catch {
         $isElevated = $false
     }
 
@@ -101,15 +103,18 @@ if (-not $eventLogAvailable) {
             if (ShouldPerform("EventLog source '$eventSource'", "Create source in $eventLogName")) {
                 New-EventLog -LogName $eventLogName -Source $eventSource
                 $eventLogAvailable = $true
-            } else {
+            }
+            else {
                 # Simulation or denied - do not create
                 $eventLogAvailable = $false
             }
-        } catch {
+        }
+        catch {
             # If creation fails even when elevated, fall back to file logging.
             $eventLogAvailable = $false
         }
-    } else {
+    }
+    else {
         # Non-elevated: we do not attempt to create the source. Provide a
         # one-time instruction later (via Write-Log) so the admin can create it.
         $eventLogAvailable = $false
@@ -124,7 +129,8 @@ if (-not $eventLogAvailable) {
             if (ShouldPerform("LogFile '$logPath'", "Append startup note")) {
                 Add-Content -Path $logPath -Value $startupNote -ErrorAction SilentlyContinue
             }
-        } catch {
+        }
+        catch {
             # If we can't even write to the script dir, fall back to original LocalAppData path
             $logPath = Join-Path $env:LOCALAPPDATA "YubiKeyPresenceLock.log"
         }
@@ -142,24 +148,27 @@ function Write-Log {
         if ($eventLogAvailable) {
             if (ShouldPerform("EventLog '$eventLogName'", "Write event ($eventSource): $Message")) {
                 Write-EventLog -LogName $eventLogName `
-                               -Source  $eventSource `
-                               -EntryType Information `
-                               -EventId 1000 `
-                               -Message $Message
+                    -Source  $eventSource `
+                    -EntryType Information `
+                    -EventId 1000 `
+                    -Message $Message
             }
-        } else {
+        }
+        else {
             # Fallback to file if source isn't available
             if (ShouldPerform("LogFile '$logPath'", "Append message")) {
                 Add-Content -Path $logPath -Value $line
             }
         }
-    } catch {
+    }
+    catch {
         # Last resort: try to write to file log
         try {
             if (ShouldPerform("LogFile '$logPath'", "Append message (fallback)")) {
                 Add-Content -Path $logPath -Value $line
             }
-        } catch {
+        }
+        catch {
             # If this also fails, we silently give up.
             # (Cannot log here without risking infinite recursion)
         }
@@ -169,9 +178,10 @@ function Write-Log {
 function Test-YubiPresent {
     try {
         $dev = Get-PnpDevice -PresentOnly |
-               Where-Object { $_.InstanceId -like "*$yubiPrefix*" }
+        Where-Object { $_.InstanceId -like "*$yubiPrefix*" }
         return [bool]$dev
-    } catch {
+    }
+    catch {
         # Fail-safe: don't lock on errors
         return $true
     }
@@ -189,7 +199,8 @@ try {
         Write-Log "Another instance of YubiKeyPresenceLock is already running. Exiting."
         return
     }
-} catch {
+}
+catch {
     Write-Log "Failed to create/check mutex '$mutexName': $($_.Exception.Message). Continuing without single-instance guarantee."
 }
 
@@ -197,7 +208,8 @@ try {
     # === Import PnpDevice ===
     try {
         Import-Module PnpDevice -ErrorAction Stop
-    } catch {
+    }
+    catch {
         $msg = "PnpDevice module not available: $($_.Exception.Message)"
         Write-Log $msg
         return
@@ -209,7 +221,8 @@ try {
         Import-Module BurntToast -ErrorAction Stop
         $script:UseBurntToast = $true
         Write-Log "BurntToast imported successfully."
-    } catch {
+    }
+    catch {
         Write-Log "BurntToast failed to import: $($_.Exception.Message)"
     }
 
@@ -223,19 +236,46 @@ try {
                 if (ShouldPerform("Notification", "Show toast: $Title - $Message")) {
                     if (Test-Path $iconPath) {
                         New-BurntToastNotification -Text $Title, $Message -AppLogo $iconPath | Out-Null
-                    } else {
+                    }
+                    else {
                         New-BurntToastNotification -Text $Title, $Message | Out-Null
                     }
                 }
-            } catch {
+            }
+            catch {
                 Write-Log "BurntToast Show-Toast failed: $($_.Exception.Message)"
             }
         }
     }
 
     # ----------- Startup Logging ---------------
+    # ----------- Reliable Startup Toast (Handles slow shell initialization) -----------
+    function Show-StartupToast {
+        param(
+            [int]$Retries = 5,
+            [int]$DelaySeconds = 1
+        )
+
+        for ($i = 1; $i -le $Retries; $i++) {
+            try {
+                Show-Toast "YubiKey Watcher" "Presence monitoring started."
+                Write-Log "Startup toast displayed on attempt $i."
+                return
+            }
+            catch {
+                Write-Log "Startup toast failed on attempt ${i}: $($_.Exception.Message)"
+                Start-Sleep -Seconds $DelaySeconds
+            }
+        }
+
+        Write-Log "Startup toast failed after $Retries attempts."
+    }
+
     Write-Log "=== YubiKey presence watcher started (prefix contains '$yubiPrefix', threshold = $missingThreshold) ==="
-    Show-Toast "YubiKey Watcher" "Presence monitoring started."
+
+    # Try to display the startup toast reliably
+    Show-StartupToast
+
 
     # ----------- LOGIN ENFORCEMENT: Require YubiKey ----------
     # If the key is missing at logon, lock once and proceed (don't spam locks).
@@ -243,18 +283,19 @@ try {
         if (-not (Test-YubiPresent)) {
             Write-Log "YubiKey not present on logon attempt. Locking workstation."
             Show-Toast "YubiKey Missing" "YubiKey absent at logon. Locking workstation."
-            if (ShouldPerform('Workstation','Lock')) {
-                rundll32.exe user32.dll,LockWorkStation
+            if (ShouldPerform('Workstation', 'Lock')) {
+                rundll32.exe user32.dll, LockWorkStation
             }
             # Lock once and break; the main watcher will continue monitoring.
             break
-        } else {
+        }
+        else {
             Write-Log "YubiKey present at logon."
             break
         }
     }
 
-    $wasPresent   = Test-YubiPresent
+    $wasPresent = Test-YubiPresent
     $missingCount = 0
     # Track whether we've already locked the workstation due to a missing key
     $isLocked = $false
@@ -264,7 +305,8 @@ try {
     # ------------ Main loop: polls once per second --------------
     if ($wasPresent) {
         Write-Log "YubiKey present at startup."
-    } else {
+    }
+    else {
         Write-Log "YubiKey NOT present at startup."
     }
 
@@ -282,7 +324,7 @@ try {
                     }
                 }
                 $missingCount = 0
-                $wasPresent   = $true
+                $wasPresent = $true
                 # Reset locked state when key returns
                 $isLocked = $false
             }
@@ -309,7 +351,7 @@ try {
                 if ($wasPresent) {
                     Write-Log "YubiKey missing. Beginning hub-resilience countdown."
                     Show-Toast "YubiKey Missing" "Waiting briefly in case of USB glitch..."
-                    $wasPresent   = $false
+                    $wasPresent = $false
                     # Start counting from 1 for the first missing check
                     $missingCount = 1
                     # Ensure we haven't already locked
@@ -330,8 +372,8 @@ try {
                 if (($missingCount -ge $missingThreshold) -and (-not $isLocked)) {
                     Write-Log "YubiKey missing for $missingCount checks. Locking workstation."
                     Show-Toast "YubiKey Missing" "YubiKey absent. Locking workstation."
-                    if (ShouldPerform('Workstation','Lock')) {
-                        rundll32.exe user32.dll,LockWorkStation
+                    if (ShouldPerform('Workstation', 'Lock')) {
+                        rundll32.exe user32.dll, LockWorkStation
                     }
                     $isLocked = $true
                     # small pause after locking to avoid immediate retriggering
@@ -339,7 +381,8 @@ try {
                 }
             }
 
-        } catch {
+        }
+        catch {
             Write-Log "Error in main loop: $($_.Exception.Message)"
             Start-Sleep -Seconds 5
         }

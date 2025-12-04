@@ -1,0 +1,80 @@
+# EditorConfig helps maintain consistent coding styles
+# across different editors and IDEs.
+
+root = true
+
+###############################################################################
+# Global defaults
+###############################################################################
+[*]
+indent_style = space
+indent_size = 4
+charset = utf-8
+end_of_line = lf
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+###############################################################################
+# PowerShell scripts
+###############################################################################
+[*.ps1]
+indent_style = space
+indent_size = 4
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+
+[*.psm1]
+indent_style = space
+indent_size = 4
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+
+###############################################################################
+# XML task templates (Windows scheduled task format)
+###############################################################################
+[*.xml]
+indent_style = space
+indent_size = 2
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+
+###############################################################################
+# Markdown files (GitHub style — LF only)
+###############################################################################
+[*.md]
+charset = utf-8
+end_of_line = lf
+trim_trailing_whitespace = false  # allow intentional formatting
+
+###############################################################################
+# VBS Wrapper Script — DO NOT TOUCH ENCODING!
+###############################################################################
+[*.vbs]
+# Keep Windows-1252 / ANSI encoding intact.
+# Prevent editors from converting to UTF-8 (which would break WScript).
+charset = latin1
+end_of_line = crlf
+insert_final_newline = false
+
+###############################################################################
+# JSON files
+###############################################################################
+[*.json]
+indent_style = space
+indent_size = 2
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+###############################################################################
+# GitHub workflow files
+###############################################################################
+[*.yml]
+indent_style = space
+indent_size = 2
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true

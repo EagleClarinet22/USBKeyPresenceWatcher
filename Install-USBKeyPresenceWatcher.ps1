@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallDir = "C:\Scripts\USBKeyPresenceWatcher-Install",
-    [string]$TaskName   = "USBKey Presence Watcher",
+    [string]$TaskName = "USB Key Presence Watcher",
     [string]$YubiPrefix,
     [switch]$Force,
     [switch]$DebugXml,
@@ -56,12 +56,12 @@ function Test-AdminElevation {
     $argList = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
 
     if ($InstallDir) { $argList += @("-InstallDir", "`"$InstallDir`"") }
-    if ($TaskName)   { $argList += @("-TaskName", "`"$TaskName`"") }
+    if ($TaskName) { $argList += @("-TaskName", "`"$TaskName`"") }
     if ($YubiPrefix) { $argList += @("-YubiPrefix", "`"$YubiPrefix`"") }
-    if ($Force)      { $argList += "-Force" }
-    if ($DebugXml)   { $argList += "-DebugXml" }
-    if ($WhatIf)     { $argList += "-WhatIf" }
-    if ($Help)       { $argList += "-Help" }
+    if ($Force) { $argList += "-Force" }
+    if ($DebugXml) { $argList += "-DebugXml" }
+    if ($WhatIf) { $argList += "-WhatIf" }
+    if ($Help) { $argList += "-Help" }
 
     Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $argList
 
@@ -114,16 +114,17 @@ if ($ResolvedInstallDir -and ($SourceDir -eq $ResolvedInstallDir)) {
 }
 
 # Files expected in the repo/source directory
-$scriptFile          = "USBKeyPresenceLock.ps1"
-$iconFile            = "lock_toast_64.png"
+$scriptFile = "USBKeyPresenceLock.ps1"
+$iconFile = "lock_toast_64.png"
 $templateTaskXmlFile = "Template-USBKeyPresenceLock.xml"
-$uninstallScript     = "Uninstall-USBKeyPresenceWatcher.ps1"
-$licenseFile         = "LICENSE"
-$noticeFile          = "NOTICE"
-$readmeFile          = "README.md"
+$uninstallScript = "Uninstall-USBKeyPresenceWatcher.ps1"
+$licenseFile = "LICENSE"
+$noticeFile = "NOTICE"
+$readmeFile = "README.md"
+$vbsLauncherFile = "Launch-USBKeyPresenceWatcher.vbs"
 
 $requiredFiles = @($scriptFile, $iconFile, $templateTaskXmlFile)
-$optionalFiles = @($uninstallScript, $licenseFile, $noticeFile, $readmeFile)
+$optionalFiles = @($uninstallScript, $licenseFile, $noticeFile, $readmeFile, $vbsLauncherFile)
 
 foreach ($f in $requiredFiles) {
     $fullPath = Join-Path $SourceDir $f
@@ -144,15 +145,16 @@ function Get-YubiPrefixFromUser {
     try {
         Import-Module PnpDevice -ErrorAction Stop
         $pnpModuleLoaded = $true
-    } catch {
+    }
+    catch {
         Write-Warning "Could not import PnpDevice module. You will need to enter the VID_XXXX&PID_YYYY prefix manually."
     }
 
     if ($pnpModuleLoaded) {
         try {
             $devices = Get-PnpDevice -PresentOnly |
-                Where-Object { $_.InstanceId -match 'VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}' } |
-                Sort-Object FriendlyName, InstanceId
+            Where-Object { $_.InstanceId -match 'VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}' } |
+            Sort-Object FriendlyName, InstanceId
 
             if ($devices -and $devices.Count -gt 0) {
                 Write-Host ""
@@ -160,7 +162,7 @@ function Get-YubiPrefixFromUser {
                 Write-Host ""
 
                 for ($i = 0; $i -lt $devices.Count; $i++) {
-                    $dev   = $devices[$i]
+                    $dev = $devices[$i]
                     $label = if ($dev.FriendlyName) { $dev.FriendlyName } else { $dev.Name }
 
                     Write-Host ("[{0}] {1}" -f $i, $label)
@@ -190,40 +192,47 @@ function Get-YubiPrefixFromUser {
                                 $confirm = Read-Host "Is this correct? (Y/N)"
                                 if ($confirm -match '^[Yy]$') {
                                     break  # Confirmed, exit loop
-                                } else {
+                                }
+                                else {
                                     Write-Host "Selection cancelled. Please choose again." -ForegroundColor DarkYellow
                                     $yubiPrefix = $null  # Reset so loop continues
                                 }
-                            } else {
+                            }
+                            else {
                                 Write-Warning "Could not extract VID/PID from that device. Try another index or use manual mode."
                             }
-                        } else {
+                        }
+                        else {
                             Write-Warning "Invalid index. Try again."
                         }
-                    } else {
+                    }
+                    else {
                         Write-Warning "Invalid input. Enter an index number or 'M'."
                     }
                 }
-            } else {
+            }
+            else {
                 Write-Warning "No devices with VID_XXXX&PID_YYYY found. Falling back to manual entry."
             }
-        } catch {
+        }
+        catch {
             Write-Warning "Error while listing devices: $($_.Exception.Message). Falling back to manual entry."
         }
     }
 
     # Manual entry fallback or chosen 'M'
-        while (-not $yubiPrefix) {
-            Write-Host ""
-            Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor DarkYellow
-            $userInput = Read-Host "VID/PID prefix"
+    while (-not $yubiPrefix) {
+        Write-Host ""
+        Write-Host "Enter the VID/PID prefix to monitor (for example: VID_1050&PID_0407)" -ForegroundColor DarkYellow
+        $userInput = Read-Host "VID/PID prefix"
     
-            if ($userInput -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
-                $yubiPrefix = $userInput.ToUpper()
-            } else {
-                Write-Warning "Invalid format. Expected something like: VID_1050&PID_0407"
-            }
+        if ($userInput -match '^VID_[0-9A-Fa-f]{4}&PID_[0-9A-Fa-f]{4}$') {
+            $yubiPrefix = $userInput.ToUpper()
         }
+        else {
+            Write-Warning "Invalid format. Expected something like: VID_1050&PID_0407"
+        }
+    }
 
     return $yubiPrefix
 }
@@ -236,7 +245,8 @@ if ($YubiPrefix) {
     $selectedYubiPrefix = $YubiPrefix.ToUpper()
     Write-Host ""
     Write-Host "Using provided YubiPrefix: $selectedYubiPrefix" -ForegroundColor Green
-} else {
+}
+else {
     $selectedYubiPrefix = Get-YubiPrefixFromUser
     Write-Host ""
     Write-Host "Final selected USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Green
@@ -249,7 +259,8 @@ if (-not (Test-Path $InstallDir)) {
     if (ShouldPerform("Install directory '$InstallDir'", "Create")) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
-} elseif (-not $Force) {
+}
+elseif (-not $Force) {
     Write-Host "Directory $InstallDir already exists." -ForegroundColor Yellow
     Write-Host ""
     $overwrite = Read-Host "Do you want to overwrite existing files? (Y/N)"
@@ -295,7 +306,7 @@ $scriptDestPath = Join-Path $InstallDir $scriptFile
 
 # Read script only in non-WhatIf mode; in WhatIf mode we skip the actual file ops
 if (-not ($WhatIf -or $WhatIfPreference)) {
-    $scriptContent  = Get-Content $scriptDestPath -Raw
+    $scriptContent = Get-Content $scriptDestPath -Raw
 
     # We expect a line like: $yubiPrefix = "VID_1050&PID_0407"
     $pattern = '(\$yubiPrefix\s*=\s*")[^"]*(")'
@@ -304,10 +315,12 @@ if (-not ($WhatIf -or $WhatIfPreference)) {
         $scriptContent = $scriptContent -replace $pattern, "`$1$selectedYubiPrefix`$2"
         Set-Content -Path $scriptDestPath -Value $scriptContent -Encoding UTF8
         Write-Host "Updated installed script with USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Warning "Could not find yubiPrefix assignment line to patch in the installed script. Check USBKeyPresenceLock.ps1 format."
     }
-} else {
+}
+else {
     Write-Host "WhatIf: Patch script with USB Key/device prefix: $selectedYubiPrefix" -ForegroundColor Yellow
 }
 
@@ -316,16 +329,16 @@ Write-Host "Hardening ACLs on $InstallDir..." -ForegroundColor DarkCyan
 
 if (ShouldPerform("Directory ACL on $InstallDir", "Set")) {
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
-    $inheritFlags      = [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
-    $propagationFlags  = [System.Security.AccessControl.PropagationFlags]::None
+    $inheritFlags = [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
+    $propagationFlags = [System.Security.AccessControl.PropagationFlags]::None
     $accessControlType = [System.Security.AccessControl.AccessControlType]::Allow
-    $rights            = [System.Security.AccessControl.FileSystemRights]::FullControl
+    $rights = [System.Security.AccessControl.FileSystemRights]::FullControl
 
     # Use DOMAIN\Username form for safety (DOMAIN may be machine name)
     $accountName = "$env:USERDOMAIN\$env:USERNAME"
     $currentUser = New-Object System.Security.Principal.NTAccount($accountName)
-    $admins      = New-Object System.Security.Principal.NTAccount("Administrators")
-    $system      = New-Object System.Security.Principal.NTAccount("SYSTEM")
+    $admins = New-Object System.Security.Principal.NTAccount("Administrators")
+    $system = New-Object System.Security.Principal.NTAccount("SYSTEM")
 
     foreach ($id in @($currentUser, $admins, $system)) {
         $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -339,7 +352,7 @@ if (ShouldPerform("Directory ACL on $InstallDir", "Set")) {
 }
 
 # ---------- Ensure EventLog source exists ----------
-$eventSource  = "USBKeyPresenceWatcher"
+$eventSource = "USBKeyPresenceWatcher"
 $eventLogName = "Application"
 
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
@@ -350,7 +363,8 @@ try {
             New-EventLog -LogName $eventLogName -Source $eventSource
         }
     }
-} catch {
+}
+catch {
     Write-Warning "Could not create EventLog source '$eventSource': $($_.Exception.Message)"
 }
 # PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
@@ -366,37 +380,41 @@ if (-not (Test-Path $templateXmlPath)) {
     if (Test-Path $fallback) {
         Write-Host "Template not found in install dir; using repo template: $fallback" -ForegroundColor Yellow
         $templateXmlPath = $fallback
-    } else {
+    }
+    else {
         throw "Template task XML '$templateTaskXmlFile' not found in install dir or source directory."
     }
 }
-$xmlContent      = Get-Content $templateXmlPath -Raw
+$xmlContent = Get-Content $templateXmlPath -Raw
 
 # Values to plug into the XML
-$scriptPath  = $scriptDestPath      # full path to USBKeyPresenceLock.ps1 in the install dir
-$workDir     = $InstallDir
+$scriptPath = $scriptDestPath      # full path to USBKeyPresenceLock.ps1 in the install dir
+$workDir = $InstallDir
 $accountName = "$env:USERDOMAIN\$env:USERNAME"
 
 # Resolve SID for the current user
 try {
-    $userNt  = New-Object System.Security.Principal.NTAccount($accountName)
+    $userNt = New-Object System.Security.Principal.NTAccount($accountName)
     $userSid = $userNt.Translate([System.Security.Principal.SecurityIdentifier]).Value
-} catch {
+}
+catch {
     throw "Failed to resolve SID for '$accountName': $($_.Exception.Message)"
 }
 
 # Escape values for XML safety
 $escapedScriptPath = [System.Security.SecurityElement]::Escape($scriptPath)
-$escapedWorkDir    = [System.Security.SecurityElement]::Escape($workDir)
-$escapedUser       = [System.Security.SecurityElement]::Escape($accountName)
-$escapedUserSid    = [System.Security.SecurityElement]::Escape($userSid)
-
+$escapedWorkDir = [System.Security.SecurityElement]::Escape($workDir)
+$escapedUser = [System.Security.SecurityElement]::Escape($accountName)
+$escapedUserSid = [System.Security.SecurityElement]::Escape($userSid)
+$vbsLauncherPath = Join-Path $InstallDir $vbsLauncherFile
+$escapedVbsPath = [System.Security.SecurityElement]::Escape($vbsLauncherPath)
 # Replace placeholders in the template
 $xmlResolved = $xmlContent `
-    -replace "__SCRIPT_PATH__",  $escapedScriptPath `
-    -replace "__WORK_DIR__",     $escapedWorkDir `
-    -replace "__USERNAME__",     $escapedUser `
-    -replace "__USERNAME_SID__", $escapedUserSid
+    -replace "__SCRIPT_PATH__", $escapedScriptPath `
+    -replace "__WORK_DIR__", $escapedWorkDir `
+    -replace "__USERNAME__", $escapedUser `
+    -replace "__USERNAME_SID__", $escapedUserSid `
+    -replace "__VBS_PATH__", $escapedVbsPath
 
 # Write the resolved XML to a persistent task XML in the install dir
 $taskXmlResolvedPath = Join-Path $InstallDir "Task-USBKeyPresenceLock.xml"
@@ -427,7 +445,8 @@ try {
             schtasks.exe /delete /tn "$TaskName" /f > $null
         }
     }
-} catch {}
+}
+catch {}
 
 if (ShouldPerform("Scheduled task '$TaskName'", "Create from XML")) {
     Write-Host "Registering scheduled task '$TaskName' from XML..."
@@ -444,7 +463,8 @@ if (ShouldPerform("Scheduled task '$TaskName'", "Create from XML")) {
 Write-Host ""
 if ($WhatIf -or $WhatIfPreference) {
     Write-Host "[Simulation Mode] Installation successfully simulated. No changes were made." -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "Installation complete. Log off and back on to test the watcher." -ForegroundColor Green
 }
 if ($Host.Name -eq "ConsoleHost") {

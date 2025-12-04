@@ -1,0 +1,182 @@
+name: Repository Validation Pipeline
+
+on:
+  pull_request:
+    paths:
+      - "**/*.ps1"
+      - "**/*.psm1"
+      - "**/*.psd1"
+      - "**/*.xml"
+      - ".gitattributes"
+      - "PSScriptAnalyzerSettings.psd1"
+  push:
+    paths:
+      - "**/*.ps1"
+      - "**/*.psm1"
+      - "**/*.psd1"
+      - "**/*.xml"
+      - ".gitattributes"
+      - "PSScriptAnalyzerSettings.psd1"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-repository:
+    runs-on: ubuntu-latest
+
+    steps:
+      #####################################################################
+      # Step 1 — Checkout Repo
+      #####################################################################
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      #####################################################################
+      # Step 2 — Show effective .gitattributes rules
+      #####################################################################
+      - name: Show effective .gitattributes rules
+        run: git check-attr --all -- . | sort
+
+      #####################################################################
+      # Step 3 — Validate XML encoding (must be UTF-16)
+      #####################################################################
+      - name: Validate XML encoding requirements
+        run: |
+          xml_files=$(git ls-files "*.xml" || true)
+
+          if [[ -z "$xml_files" ]]; then
+            echo "No XML files found."
+            exit 0
+          fi
+
+          for f in $xml_files; do
+            attr=$(git check-attr text -- "$f" | awk '{print $3}')
+            encoding=$(file -bi "$f" | sed 's/.*charset=//')
+
+            echo "Checking $f (text=$attr, encoding=$encoding)"
+
+            if [[ "$attr" != "unset" ]]; then
+              echo "::error file=$f::Expected '-text' in .gitattributes, but was '$attr'."
+              exit 1
+            fi
+
+            if [[ "$encoding" != "utf-16le" && "$encoding" != "utf-16be" ]]; then
+              echo "::warning file=$f::XML is not UTF-16 ($encoding)."
+              echo "::warning file=$f::Fix in VS Code: Save with Encoding → UTF-16 LE."
+              echo "::error file=$f::Invalid XML encoding."
+              exit 1
+            fi
+          done
+
+      #####################################################################
+      # Step 4 — Validate XML structure
+      #####################################################################
+      - name: Install xmllint (libxml2-utils)
+        run: |
+          sudo apt-get update -y >/dev/null 2>&1
+          sudo apt-get install -y libxml2-utils >/dev/null 2>&1
+
+      - name: Validate XML structure with xmllint
+        run: |
+          for f in $(git ls-files "*.xml"); do
+            echo "Validating $f structure..."
+            xmllint --noout "$f"
+            if [[ $? -ne 0 ]]; then
+              echo "::error file=$f::Malformed XML."
+              exit 1
+            fi
+            echo "✔ $f structure OK"
+          done
+
+      #####################################################################
+      # Step 5 — Validate PowerShell CRLF line endings
+      #####################################################################
+      - name: Validate PowerShell CRLF line endings
+        run: |
+          ps_files=$(git ls-files "*.ps1" "*.psm1" "*.psd1" || true)
+
+          for f in $ps_files; do
+            if file "$f" | grep -q "CRLF"; then
+              echo "✔ $f uses CRLF"
+            else
+              echo "::error file=$f::PowerShell files must use CRLF line endings."
+              exit 1
+            fi
+          done
+
+      #####################################################################
+      # Step 6 — Validate Markdown LF line endings
+      #####################################################################
+      - name: Validate Markdown LF line endings
+        run: |
+          for f in $(git ls-files "*.md" || true); do
+            if file "$f" | grep -q "CRLF"; then
+              echo "::error file=$f::Markdown must use LF line endings."
+              exit 1
+            fi
+            echo "✔ $f uses LF"
+          done
+
+      #####################################################################
+      # Step 7 — Run PSScriptAnalyzer (summary counts only)
+      #####################################################################
+      - name: Run PSScriptAnalyzer with summary + PR comment
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Write-Host "Running PSScriptAnalyzer..."
+
+          # Run analyzer with local settings file
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+
+          # Count result types
+          $errorCount   = ($results | Where-Object Severity -eq 'Error').Count
+          $warningCount = ($results | Where-Object Severity -eq 'Warning').Count
+          $infoCount    = ($results | Where-Object Severity -eq 'Information').Count
+
+          #################################################################
+          # Build a compact Markdown summary (NO YAML-SENSITIVE CHARS)
+          #################################################################
+          $summary = ""
+          $summary += "### 🔍 PSScriptAnalyzer Summary`n`n"
+          $summary += "| Type | Count |`n"
+          $summary += "|------|-------|`n"
+          $summary += "| ❌ Errors | $errorCount |`n"
+          $summary += "| ⚠ Warnings | $warningCount |`n"
+          $summary += "| ℹ Information | $infoCount |`n`n"
+          $summary += "> Full results appear in the **Actions → Summary** tab.`n"
+
+          #################################################################
+          # Publish to GitHub Actions summary UI
+          #################################################################
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
+          #################################################################
+          # Publish PR comment (file upload preserves markdown)
+          #################################################################
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $temp = "$env:RUNNER_TEMP/psa_summary.md"
+            $summary | Out-File -FilePath $temp -Encoding utf8
+
+            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments `
+              -F body=@$temp
+          }
+
+          #################################################################
+          # Fail ONLY when errors exist
+          #################################################################
+          if ($errorCount -gt 0) {
+            Write-Error "PSScriptAnalyzer errors detected."
+            exit 1
+          }
+
+          Write-Host "✔ No errors — warnings allowed."
+
+      #####################################################################
+      # Step 8 — Completed
+      #####################################################################
+      - name: Validation complete
+        run: echo "🎉 Repository validation succeeded."

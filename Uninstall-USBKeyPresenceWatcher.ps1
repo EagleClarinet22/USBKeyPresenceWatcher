@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Connor Anderson (EagleClarinet22)
+# Copyright (c) 2025 Connor Anderson
 
 [CmdletBinding()]
 param(
@@ -15,7 +15,7 @@ if ($WhatIf) {
     Write-Host "[Simulation Mode] -WhatIf is enabled. No system changes will be made." -ForegroundColor Yellow
 }
 
-# Helper: unified ShouldProcess emulator for safe state-changing operations
+# Helper: unified ShouldProcess emulator
 # PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 function ShouldPerform {
     param(
@@ -23,8 +23,6 @@ function ShouldPerform {
         [string]$Action
     )
 
-    # Emulate WhatIf behavior: if script-level -WhatIf or builtin WhatIfPreference is set,
-    # print a simulation line and return $false (do not perform).
     if ($WhatIf -or $WhatIfPreference) {
         Write-Host "WhatIf: $Action on $Target" -ForegroundColor Yellow
         return $false
@@ -35,7 +33,6 @@ function ShouldPerform {
 # PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
 
 function Test-AdminElevation {
-    # Check if already admin
     $current = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($current)
 
@@ -47,18 +44,47 @@ function Test-AdminElevation {
 
     $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-    # Build argument list using actual bound variables
     $argList = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
 
-    if ($TaskName)   { $argList += @("-TaskName", "`"$TaskName`"") }
-    if ($WhatIf)     { $argList += "-WhatIf" }
-    if ($Help)       { $argList += "-Help" }
+    if ($TaskName) { $argList += @("-TaskName", "`"$TaskName`"") }
+    if ($WhatIf) { $argList += "-WhatIf" }
+    if ($Help) { $argList += "-Help" }
 
     Start-Process -FilePath $psExe -Verb RunAs -ArgumentList $argList
-
     exit
 }
 
+function Remove-WatcherTask {
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try {
+        $null = schtasks.exe /query /tn "$TaskName" 2>$null
+        $taskExists = ($LASTEXITCODE -eq 0)
+    }
+    finally {
+        $ErrorActionPreference = $oldEAP
+    }
+
+    if (-not $taskExists) {
+        Write-Warning "Scheduled task '$TaskName' does not exist. It may have been manually removed. Skipping task removal."
+        return
+    }
+
+    Write-Host "Attempting to stop task '$TaskName' (if running)..." -ForegroundColor Yellow
+    $null = schtasks.exe /end /tn "$TaskName" 2>$null
+
+    Write-Host "Deleting task '$TaskName'..." -ForegroundColor Yellow
+    $null = schtasks.exe /delete /tn "$TaskName" /f 2>$null
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to delete scheduled task '$TaskName'. Exit code: $LASTEXITCODE"
+    }
+
+    Write-Host "Scheduled task '$TaskName' removed successfully." -ForegroundColor Green
+}
+
+# Handle -Help
 if ($Help) {
     Write-Host "Uninstall-USBKeyPresenceWatcher.ps1" -ForegroundColor Cyan
     Write-Host ""
@@ -79,59 +105,107 @@ if ($Help) {
 
 Test-AdminElevation
 
-Write-Host "Uninstalling scheduled task '$TaskName'..." -ForegroundColor Cyan
+# ----------------------------------------------------------
+# MAIN UNINSTALL PROCESS (now properly wrapped in try/catch)
+# ----------------------------------------------------------
 
-# Determine the install directory from this script's location
-$InstallDir = Split-Path -Parent $PSCommandPath
-
-# PSScriptAnalyzer: Disable=PSUseShouldProcessForStateChangingCmdlets
 try {
-    # Check if the task exists
-    schtasks.exe /query /tn "$TaskName" > $null 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Scheduled task '$TaskName' was not found. Nothing to remove."
-        return
-    }
+    Write-Host "Uninstalling scheduled task '$TaskName'..." -ForegroundColor Cyan
 
-    Write-Host "Attempting to stop task '$TaskName' (if running)..." -ForegroundColor Yellow
-    if (ShouldPerform("Scheduled task '$TaskName'", "Stop if running")) {
-        schtasks.exe /end /tn "$TaskName" > $null 2>&1
-    }
+    # Determine install directory
+    $InstallDir = Split-Path -Parent $PSCommandPath
+    Write-Host "Stopping running watcher processes..." -ForegroundColor Yellow
 
-    Write-Host "Deleting task '$TaskName'..." -ForegroundColor Yellow
-    if (ShouldPerform("Scheduled task '$TaskName'", "Delete")) {
-        schtasks.exe /delete /tn "$TaskName" /f > $null
+    # Full paths to match against
+    $watcherScript = Join-Path $InstallDir "USBKeyPresenceLock.ps1"
+    $vbsLauncher = Join-Path $InstallDir "Launch-USBKeyWatcher.vbs"
 
-        if ($LASTEXITCODE -ne 0) {
-            throw "schtasks.exe /delete returned exit code $LASTEXITCODE"
+    # Normalize escaped patterns for regex
+    $escapedWatcher = [regex]::Escape($watcherScript)
+    $escapedVbs = [regex]::Escape($vbsLauncher)
+
+    # --- Kill powershell.exe instances running the watcher script ---
+    try {
+        $psList = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ieq "powershell.exe" -and
+            $_.CommandLine -match $escapedWatcher
         }
 
-        Write-Host "Scheduled task '$TaskName' removed successfully." -ForegroundColor Green
+        foreach ($proc in $psList) {
+            Write-Host "Stopping watcher PowerShell instance (PID $($proc.ProcessId))..." -ForegroundColor DarkYellow
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        }
     }
+    catch {
+        Write-Warning "Could not enumerate PowerShell processes by CIM: $($_.Exception.Message)"
+    }
+
+    # --- Kill wscript.exe instances running our VBS wrapper ---
+    try {
+        $wsList = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -ieq "wscript.exe" -and
+            $_.CommandLine -match $escapedVbs
+        }
+
+        foreach ($proc in $wsList) {
+            Write-Host "Stopping watcher VBScript host (PID $($proc.ProcessId))..." -ForegroundColor DarkYellow
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Warning "Could not enumerate wscript processes: $($_.Exception.Message)"
+    }
+
+    Write-Host "Watcher processes stopped." -ForegroundColor Green
     
-    # Clean up the install directory
+    # Step 2: Remove scheduled task
+    Remove-WatcherTask
+
+    # Remove VBS launcher if present
+    $vbsPath = Join-Path $InstallDir "Launch-USBKeyWatcher.vbs"
+    if (Test-Path $vbsPath) {
+        Remove-Item $vbsPath -Force -ErrorAction SilentlyContinue
+    }
+
+    # Step 3: Remove installation directory and contents
     Write-Host "Cleaning up installation directory: $InstallDir" -ForegroundColor Yellow
+
     if (ShouldPerform("Installation directory '$InstallDir'", "Remove")) {
-        # Remove all files in the install directory (including this uninstall script)
+
+        # Remove files inside directory
         Get-ChildItem -Path $InstallDir -File | ForEach-Object {
             Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
         }
-        
-        # Remove the directory itself
+
+        # Remove directory itself
         Remove-Item -Path $InstallDir -Force -ErrorAction SilentlyContinue
-        
+
         if (Test-Path $InstallDir) {
             Write-Warning "Could not fully remove directory '$InstallDir'. You may need to remove it manually."
-        } else {
+        }
+        else {
             Write-Host "Installation directory removed successfully." -ForegroundColor Green
         }
     }
 }
 catch {
-    Write-Error "Failed to complete uninstallation: $($_.Exception.Message)"
-}
-# PSScriptAnalyzer: Enable=PSUseShouldProcessForStateChangingCmdlets
+    $msg = @"
+FAILED TO COMPLETE UNINSTALLATION
+--------------------------------
+$($_.Exception.Message)
 
+ORIGIN:
+$($_.InvocationInfo.PositionMessage)
+
+STACK TRACE:
+$($_.ScriptStackTrace)
+"@
+    Write-Error $msg
+}
+
+# Pause if running in direct ConsoleHost
 if ($Host.Name -eq "ConsoleHost") {
     Write-Host ""
     Read-Host "Press Enter to exit..."
