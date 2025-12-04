@@ -131,7 +131,7 @@ jobs:
         run: |
           Write-Host "Running PSScriptAnalyzer..."
 
-          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings internal-docs/PSScriptAnalyzerSettings.psd1
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
 
           if ($results) {
             $results | Format-Table
