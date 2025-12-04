@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.4.1] - 2025-12-04
+- Updated README.md with CI badge
+
 ## [1.3.0] – 2025-12-04
 
 ### 🚀 Overview
