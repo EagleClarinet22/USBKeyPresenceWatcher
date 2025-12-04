@@ -1,0 +1,38 @@
+name: "🛠 Improvement Roadmap (Master Checklist)"
+description: "Create or update the master repository-wide improvement checklist."
+title: "Improvement Roadmap — Master Checklist"
+labels:
+  - enhancement
+  - roadmap
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🛠 Repository Improvement Roadmap
+
+        Use this template to create or update the main project-wide improvement list.
+
+        Add checklist items, reference audit IDs, and break them into categories:
+        - 🔴 Needs Fixing  
+        - 🟡 Nice to Have  
+        - 🟢 Up to You  
+
+        You can paste a generated checklist directly into the section below.
+
+  - type: textarea
+    id: roadmap
+    attributes:
+      label: "📋 Improvement Checklist"
+      description: "Paste your full TODO/Sub-issues list here."
+      placeholder: |
+        - [ ] [ID X] Description of issue...
+        - [ ] [ID Y] Description of issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"
+      description: "Optional: add context, links, or screenshots."
+      placeholder: "Additional details..."
