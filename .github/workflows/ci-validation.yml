@@ -91,7 +91,7 @@ jobs:
           done
 
       #####################################################################
-      # Step 5 — Validate PowerShell line endings (CRLF)
+      # Step 5 — Validate PowerShell CRLF line endings
       #####################################################################
       - name: Validate PowerShell CRLF line endings
         run: |
@@ -120,7 +120,7 @@ jobs:
           done
 
       #####################################################################
-      # Step 7 — Run PSScriptAnalyzer with Table Summary + PR Comment
+      # Step 7 — Run PSScriptAnalyzer (summary counts only)
       #####################################################################
       - name: Run PSScriptAnalyzer with summary + PR comment
         shell: pwsh
@@ -129,69 +129,46 @@ jobs:
         run: |
           Write-Host "Running PSScriptAnalyzer..."
 
-          # Use root-level settings file
+          # Run analyzer with local settings file
           $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 
-          if ($results) {
-            $results | Format-Table
-          } else {
-            Write-Host "No PSScriptAnalyzer issues found."
-          }
-
-          $errors   = $results | Where-Object Severity -eq 'Error'
-          $warnings = $results | Where-Object Severity -eq 'Warning'
+          # Count result types
+          $errorCount   = ($results | Where-Object Severity -eq 'Error').Count
+          $warningCount = ($results | Where-Object Severity -eq 'Warning').Count
+          $infoCount    = ($results | Where-Object Severity -eq 'Information').Count
 
           #################################################################
-          # Build Markdown Table Header (using a here-string)
+          # Build a compact Markdown summary (NO YAML-SENSITIVE CHARS)
           #################################################################
-          $summary = @"
-          ### 🔍 PSScriptAnalyzer Results
-
-          | Severity | Rule | File | Line | Message |
-          |----------|------|-------|------|---------|
-          "@
-
-          #################################################################
-          # Add table rows
-          #################################################################
-          if ($results) {
-            foreach ($r in $results) {
-              $sev  = $r.Severity
-              $rule = $r.RuleName
-              $file = $r.ScriptPath
-              $line = $r.Line
-              $msg  = $r.Message.Replace("|","`|")
-
-              $summary += "| $sev | $rule | `$file | $line | $msg |`n"
-            }
-          }
-          else {
-            $summary += "| ✔ No issues found | | | | |`n"
-          }
+          $summary = ""
+          $summary += "### 🔍 PSScriptAnalyzer Summary`n`n"
+          $summary += "| Type | Count |`n"
+          $summary += "|------|-------|`n"
+          $summary += "| ❌ Errors | $errorCount |`n"
+          $summary += "| ⚠ Warnings | $warningCount |`n"
+          $summary += "| ℹ Information | $infoCount |`n`n"
+          $summary += "> Full results appear in the **Actions → Summary** tab.`n"
 
           #################################################################
-          # Write summary to GitHub Actions UI
+          # Publish to GitHub Actions summary UI
           #################################################################
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
 
           #################################################################
-          # Post PR comment
+          # Publish PR comment (file upload preserves markdown)
           #################################################################
           if ("${{ github.event_name }}" -eq "pull_request") {
-            Write-Host "Posting PR comment..."
-            # Save the summary to a temp file so gh preserves newlines/markdown
-            $tempFile = "$env:RUNNER_TEMP/psa_summary.md"
-            $summary | Out-File -FilePath $tempFile -Encoding utf8
+            $temp = "$env:RUNNER_TEMP/psa_summary.md"
+            $summary | Out-File -FilePath $temp -Encoding utf8
 
-            # Post comment using file upload syntax
             gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments `
-            -F body=@$tempFile
+              -F body=@$temp
           }
 
           #################################################################
-          # Fail only on errors
+          # Fail ONLY when errors exist
           #################################################################
-          if ($errors) {
+          if ($errorCount -gt 0) {
             Write-Error "PSScriptAnalyzer errors detected."
             exit 1
           }
