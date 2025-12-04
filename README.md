@@ -6,6 +6,8 @@
 ![Automation](https://img.shields.io/badge/Scheduled%20Task-Automated-green)
 ![BurntToast](https://img.shields.io/badge/Toast%20Notifications-BurntToast-orange)
 ![Version](https://img.shields.io/github/v/tag/EagleClarinet22/USBKeyPresenceWatcher?label=version)
+![CI](https://github.com/EagleClarinet22/USBKeyPresenceWatcher/actions/workflows/ci-validation.yml/badge.svg)
+
 
 Automatically lock your Windows session when your YubiKey (or _any_ chosen USB device) is removed — and keep the system locked until that device is reinserted.
 
