@@ -179,8 +179,13 @@ jobs:
           #################################################################
           if ("${{ github.event_name }}" -eq "pull_request") {
             Write-Host "Posting PR comment..."
+            # Save the summary to a temp file so gh preserves newlines/markdown
+            $tempFile = "$env:RUNNER_TEMP/psa_summary.md"
+            $summary | Out-File -FilePath $tempFile -Encoding utf8
+
+            # Post comment using file upload syntax
             gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments `
-              -f body="$summary"
+            -F body=@$tempFile
           }
 
           #################################################################
