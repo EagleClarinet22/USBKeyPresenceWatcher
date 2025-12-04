@@ -15,52 +15,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    ##################################################################
-    # Step 1 — Verify pwsh is available on the runner
-    ##################################################################
-    - name: Confirm PowerShell availability
-      run: pwsh -NoLogo -Command '$PSVersionTable'
+      ##################################################################
+      # Step 1 — Verify pwsh is available on the runner
+      ##################################################################
+      - name: Confirm PowerShell availability
+        run: pwsh -NoLogo -Command '$PSVersionTable'
 
-    ##################################################################
-    # Step 2 — Install PSScriptAnalyzer
-    ##################################################################
-    - name: Install PSScriptAnalyzer
-      shell: pwsh
-      run: |
-        Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+      ##################################################################
+      # Step 2 — Install PSScriptAnalyzer
+      ##################################################################
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Import-Module PSScriptAnalyzer
 
-    ##################################################################
-    # Step 3 — Syntax Validation (Compile each script)
-    ##################################################################
-    - name: Validate PowerShell syntax
-      shell: pwsh
-      run: |
-        $files = Get-ChildItem -Recurse -Include *.ps1, *.psm1
-        foreach ($file in $files) {
-          Write-Host "Checking syntax: $file"
-          try {
-            pwsh -NoLogo -NoProfile -Command "Invoke-Expression (Get-Content -Raw '$file')" 2>$null
-          } catch {
-            Write-Error "Syntax error in $file"
-            exit 1
+      ##################################################################
+      # Step 3 — Syntax Validation (Compile each script)
+      ##################################################################
+      - name: Validate PowerShell Syntax
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Include *.ps1, *.psm1
+
+          if (-not $files) {
+              Write-Host "No PowerShell scripts found to check."
+              exit 0
           }
-        }
-        Write-Host "✔ Syntax validation passed"
 
-    ##################################################################
-    # Step 4 — PSScriptAnalyzer rules validation
-    ##################################################################
-    - name: Run PSScriptAnalyzer
-      shell: pwsh
-      run: |
-        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error, Warning
-        if ($results.Count -gt 0) {
-          Write-Host "::error::PowerShell Analyzer found issues:"
-          $results | Format-Table
-          exit 1
-        } else {
-          Write-Host "✔ No analyzer issues found"
-        }
+          foreach ($file in $files) {
+              Write-Host "Checking syntax: $($file.FullName)"
+              try {
+                  # Use -Raw to avoid multi-line tokenization bugs
+                  $content = Get-Content $file.FullName -Raw
+                  [System.Management.Automation.PSParser]::Tokenize($content, [ref]$null) | Out-Null
+              } catch {
+                  Write-Error ("Syntax error in file {0}: {1}" -f $file.FullName, $_.Exception.Message)
+                  exit 1
+              }
+          }
+
+          Write-Host "✔ Syntax validation passed"
+
+      ##################################################################
+      # Step 4 — PSScriptAnalyzer rules validation
+      ##################################################################
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error, Warning
+
+          if ($results.Count -gt 0) {
+              Write-Host "::error::PowerShell Analyzer found issues:"
+              $results | Format-Table
+              exit 1
+          } else {
+              Write-Host "✔ No analyzer issues found"
+          }
