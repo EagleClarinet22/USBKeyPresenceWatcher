@@ -1,0 +1,56 @@
+name: "🐞 Bug Report"
+description: "Report a bug or unexpected behavior in USBKeyPresenceWatcher."
+title: "[BUG] <short description>"
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐞 Bug Report
+
+        Please fill out as much as possible to help diagnose the issue.
+  - type: textarea
+    id: description
+    attributes:
+      label: "🔍 What happened?"
+      description: "Describe the bug in detail."
+      placeholder: "Example: Watcher did not lock computer when key was removed..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "🔁 Steps to reproduce"
+      placeholder: |
+        1. Install watcher...
+        2. Remove key...
+        3. Expected lock, instead saw...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: "📦 Version"
+      placeholder: "v1.3.0, commit hash, or branch"
+
+  - type: input
+    id: os
+    attributes:
+      label: "🖥 Windows Version"
+      placeholder: "Example: Windows 11 Pro 23H2"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "📑 Logs or error output"
+      description: "If applicable, include any PowerShell errors or workflow logs."
+      render: text
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"
+      placeholder: "Screenshots, context, or possible cause..."

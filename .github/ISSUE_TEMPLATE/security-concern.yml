@@ -1,0 +1,40 @@
+name: "🚨 Security Concern"
+description: "Report potential security issues or bypass concerns."
+title: "[SECURITY] <short description>"
+labels:
+  - security
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Do NOT include sensitive personal information.**
+
+        Use this issue to report:
+        - Possible bypasses of locking behavior
+        - Unintended elevation paths
+        - Permissions concerns
+        - Task Scheduler vulnerabilities
+  - type: textarea
+    id: description
+    attributes:
+      label: "🔒 Describe the issue"
+      placeholder: "Explain the potential security weakness..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: "💥 Potential Impact"
+      placeholder: "What could go wrong if exploited?"
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: "🔁 Steps to reproduce"
+      placeholder: "If reproducible, outline steps here."
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

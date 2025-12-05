@@ -1,0 +1,33 @@
+name: "🧹 Refactor or Code Cleanup"
+description: "Track technical debt, refactoring, or structural improvements."
+title: "[REFACTOR] <short description>"
+labels:
+  - refactor
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: "📌 What needs refactoring?"
+      placeholder: "Example: Replace all relative paths with $PSScriptRoot..."
+      description: "Describe the area of code that needs cleanup."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reasoning
+    attributes:
+      label: "💡 Why refactor this?"
+      placeholder: "Maintainability, clarity, performance, consistency..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: "📦 Scope"
+      placeholder: "- Files affected\n- Expected difficulty\n- Breaking changes?"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"
