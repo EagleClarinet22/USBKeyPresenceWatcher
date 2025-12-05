@@ -1,6 +1,24 @@
 # Changelog
 
+## [v1.4.2] - 2025-12-04
+
+### Changed
+
+- Updated README to reflect new repo structure and generalized USB terminology.
+- Improved contributor workflow with new ISSUE_TEMPLATE files.
+- Updated config.yml to guide users toward Discussions and templates.
+
+### Added
+
+- Added structured issue templates (bug, feature, refactor, workflow failure, UX, security, performance, documentation).
+- Added improvement roadmap template for better project planning.
+
+### Fixed
+
+- Minor documentation inconsistencies from previous versions.
+
 ## [1.4.1] - 2025-12-04
+
 - Updated README.md with CI badge
 
 ## [1.3.0] – 2025-12-04
