@@ -1,0 +1,18 @@
+# Hybrid configuration for a personal-but-professional project
+# USBKeyPresenceWatcher — Issue Template Configuration
+
+# Allow blank issues so the project remains approachable and welcoming.
+blank_issues_enabled: true
+
+contact_links:
+  - name: "📚 Documentation / README"
+    url: "https://github.com/EagleClarinet22/USBKeyPresenceWatcher#readme"
+    about: "Start here for installation steps, troubleshooting tips, and project overview."
+
+  - name: "💬 Discussions (Questions, Ideas, Support)"
+    url: "https://github.com/EagleClarinet22/USBKeyPresenceWatcher/discussions"
+    about: "Got a question, idea, or need help? Discussions are the best place for open-ended conversation."
+
+  - name: "🛠 Improvement Roadmap"
+    url: "https://github.com/EagleClarinet22/USBKeyPresenceWatcher/issues"
+    about: "Explore or contribute to the project's long-term roadmap and improvements."

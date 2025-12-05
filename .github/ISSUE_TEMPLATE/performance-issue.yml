@@ -1,0 +1,30 @@
+name: "⚡ Performance Issue"
+description: "Report slow execution, high CPU usage, or inefficient polling."
+title: "[PERF] <short description>"
+labels:
+  - performance
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "🐌 What seems slow?"
+      placeholder: "Example: Watcher consumes 3-8% CPU at idle..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: "📊 Observed Metrics"
+      placeholder: "CPU %, memory usage, polling delay, etc."
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "💻 System details"
+      placeholder: "Windows version, hardware, PowerShell version..."
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

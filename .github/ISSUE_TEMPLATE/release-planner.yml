@@ -1,0 +1,24 @@
+name: "🎯 Release Planning"
+description: "Plan a release or version milestone (e.g., v1.4.0, v2.0)."
+title: "[RELEASE] <version> Planning"
+labels:
+  - release
+  - roadmap
+body:
+  - type: textarea
+    id: goals
+    attributes:
+      label: "🎯 Goals for this release"
+      placeholder: "- New features\n- Fixes\n- Breaking changes"
+
+  - type: textarea
+    id: issues
+    attributes:
+      label: "📌 Issues to include"
+      description: "List or reference issues included in this milestone."
+      placeholder: "- #12\n- #45\n- [ ] ID 4: Harden XML…"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

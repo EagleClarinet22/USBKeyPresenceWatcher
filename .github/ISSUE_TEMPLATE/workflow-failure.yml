@@ -1,0 +1,32 @@
+name: "⚙️ Workflow Failure"
+description: "Report issues with GitHub Actions CI workflows."
+title: "[CI] <short description>"
+labels:
+  - ci
+  - bug
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "❗ What failed?"
+      placeholder: "Example: validate-xml.yml fails on UTF-16 check..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "📑 CI Logs"
+      description: "Paste the relevant job output here."
+      render: text
+
+  - type: input
+    id: workflow
+    attributes:
+      label: "⚙️ Workflow name / file"
+      placeholder: ".github/workflows/validate-powershell.yml"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

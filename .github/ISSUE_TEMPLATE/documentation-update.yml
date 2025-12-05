@@ -1,0 +1,24 @@
+name: "📘 Documentation Update"
+description: "Request a README, guide, metadata, or comment improvement."
+title: "[DOC] <short description>"
+labels:
+  - documentation
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: "📖 What needs updating?"
+      placeholder: "Example: Add screenshots of installation..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "💡 Why is this needed?"
+      placeholder: "Better onboarding, reduce confusion, keep docs current..."
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

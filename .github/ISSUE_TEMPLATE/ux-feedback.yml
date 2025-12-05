@@ -1,0 +1,24 @@
+name: "🎨 UX / User Experience Feedback"
+description: "Improve user-facing experience (installer clarity, output messages, onboarding)."
+title: "[UX] <short description>"
+labels:
+  - ux
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: "🎛 What could be improved?"
+      placeholder: "Example: Installer messages are confusing..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: "👤 Impact"
+      placeholder: "Does this confuse users, block installation, etc.?"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "📝 Additional Notes"

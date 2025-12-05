@@ -1,4 +1,4 @@
-# YubiKey Presence Lock for Windows
+# USB Key Presence Lock for Windows
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue)
@@ -8,8 +8,7 @@
 ![Version](https://img.shields.io/github/v/tag/EagleClarinet22/USBKeyPresenceWatcher?label=version)
 ![CI](https://github.com/EagleClarinet22/USBKeyPresenceWatcher/actions/workflows/ci-validation.yml/badge.svg)
 
-
-Automatically lock your Windows session when your YubiKey (or _any_ chosen USB device) is removed — and keep the system locked until that device is reinserted.
+Automatically lock your Windows session when your selected **USB device** (security key, token, or any USB hardware you choose) is removed — and keep the system locked until that device is reinserted.
 
 This project includes:
 
@@ -20,6 +19,8 @@ This project includes:
 - A fully interactive **installer** that detects your USB devices
 - A matching **uninstaller**
 - A clean, self-elevating installation workflow
+- **GitHub Actions pipelines** validating XML, linting PowerShell, and generating releases
+- **Issue templates + Discussions** for structured reporting and community support
 
 > ⚠️ This script must run using **Windows PowerShell 5.1** (the built-in Windows PowerShell).  
 > PowerShell 7+ (pwsh.exe) is **not supported** for hidden scheduled-task execution, PnP APIs, or BurntToast.
@@ -34,11 +35,11 @@ Locks your workstation automatically when your selected USB device disappears �
 
 ### 🔁 Persistent lock enforcement
 
-If you manually unlock your workstation while the device is missing, the watcher immediately re-locks it.
+If the system is manually unlocked while the USB device is missing, the watcher immediately locks it again.
 
-### 🔔 Toast notifications
+### 🔔 Toast notifications (optional)
 
-(Requires BurntToast)
+Requires BurntToast. Indicates:
 
 - Monitoring started
 - Device removed
@@ -51,34 +52,32 @@ Prevents false positives from USB hub glitches (default: **2 consecutive misses*
 ### 🗂 Automatic Event Viewer logging
 
 Log: **Application**  
-Source: **YubiKeyPresenceWatcher**
+Source: **USBKeyPresenceWatcher**
 
 ### 🧩 Smart installer workflow
 
 The installer:
 
 - Detects all USB devices with VID/PID
-- Lets you choose the correct YubiKey or token
+- Lets you choose the correct USB device or token
 - Patches the installed script with your VID/PID
 - Hardens directory ACLs
 - Creates the EventLog source
-- Generates a runtime task XML:
+- Generates runtime task XML:
 
 ```
 Template-USBKeyPresenceLock.xml → Task-USBKeyPresenceLock.xml
 ```
 
-Your repo stays clean — only runtime output is ignored.
-
 ### 🔒 Secure installation directory
 
-Installer grants FullControl to:
+The installer grants FullControl to:
 
-- The current user
+- Current user
 - SYSTEM
 - Administrators
 
-All others removed.
+All others are removed.
 
 ---
 
@@ -86,8 +85,6 @@ All others removed.
 
 <details>
 <summary><strong>Click here to view repo structure</strong></summary>
-
-The **USBKeyPresenceWatcher** project consists of a PowerShell-based security watcher, a hidden-process launcher, an installer and uninstaller, and a Windows Task Scheduler template.
 
 ```
 USBKeyPresenceWatcher/
@@ -110,12 +107,25 @@ USBKeyPresenceWatcher/
 │   .prettierignore
 │
 └── .github/
-    └── workflows/
-            auto-hotfix.yml
-            auto-nightly.yml
-            release.yml
-            validate-powershell.yml
-            validate-xml.yml
+    ├── workflows/
+    │     auto-hotfix.yml
+    │     auto-nightly.yml
+    │     release.yml
+    │     validate-powershell.yml
+    │     validate-xml.yml
+    │     ci-validation.yml
+    │
+    └── ISSUE_TEMPLATE/
+          improvement-roadmap.yml
+          bug.yml
+          feature.yml
+          refactor.yml
+          performance.yml
+          documentation.yml
+          workflow-failure.yml
+          security.yml
+          ux.yml
+          config.yml
 ```
 
 </details>
@@ -124,16 +134,14 @@ USBKeyPresenceWatcher/
 
 # ⚙ How It Works Internally
 
-This section provides a technical overview of the system for maintainers and advanced users.
-
 ### 1. **Task Scheduler Startup**
 
-The installer registers a scheduled task configured to run:
+The installer registers a task that runs at:
 
-- At user logon
-- On session unlock
+- User logon
+- Session unlock
 
-The task launches:
+The task executes:
 
 ```
 wscript.exe Launch-USBKeyPresenceWatcher.vbs
@@ -145,57 +153,48 @@ The VBS wrapper silently launches:
 powershell.exe -WindowStyle Hidden -File USBKeyPresenceLock.ps1
 ```
 
-Ensuring **no console window appears**.
+This ensures **fully hidden execution**.
 
 ---
 
 ### 2. **USB Device Detection**
 
-The watcher polls the system once per second:
+Once per second:
 
 ```powershell
-Get-PnpDevice -PresentOnly | Where-Object InstanceId -like "*VID_1050&PID_0407*"
+Get-PnpDevice -PresentOnly | Where-Object InstanceId -like "*VID_####&PID_####*"
 ```
 
-A missing device increments a counter.  
-A present device resets it.
-
-Only after **N consecutive misses** is the workstation locked.
+- Missing device → increment counter
+- Present device → reset counter
+- After N misses → lock workstation
 
 ---
 
 ### 3. **Locking Logic**
 
-When the threshold is reached:
-
 ```powershell
 rundll32.exe user32.dll,LockWorkStation
 ```
 
-While locked, a heartbeat log entry is emitted periodically (disabled or adjustable).
+Optional heartbeat logs help diagnose issues.
 
 ---
 
 ### 4. **Single Instance Control**
 
-A mutex prevents multiple simultaneous watchers:
+A mutex prevents duplicate watchers:
 
 ```
 USBKeyPresenceWatcher_<USERNAME>
 ```
 
-This prevents duplicate tasks from triggering overlapping watchers.
-
 ---
 
-### 5. **Event Logging + Toasts**
+### 5. **Event Logging + Toast Notifications**
 
-Logs are written to:
-
-- **Event Viewer** (if source exists)
-- Else to a local log file
-
-Notifications are sent via BurntToast if installed.
+Logs go to Event Viewer or a fallback local log file.  
+Toast notifications appear if BurntToast is installed.
 
 ---
 
@@ -203,12 +202,12 @@ Notifications are sent via BurntToast if installed.
 
 The uninstaller:
 
-- Terminates running wscript.exe / powershell.exe watcher instances
+- Terminates watcher instances
 - Removes the scheduled task
 - Deletes the installation directory
 - Supports `-WhatIf`
 
-A full clean removal is guaranteed.
+Ensures complete cleanup.
 
 ---
 
@@ -216,203 +215,102 @@ A full clean removal is guaranteed.
 
 ### `Install-USBKeyPresenceWatcher.ps1`
 
-Handles installation of the watcher system:
+Handles:
 
-- Copies required files into the installation directory
-- Applies ACL hardening
-- Resolves placeholders in the XML template
-- Registers or updates the Scheduled Task
-- Supports debug XML generation
+- Selecting USB device
+- Patching watcher with VID/PID
+- Hardening ACLs
+- Generating task XML
+- Registering the task
 
 ---
 
 ### `Uninstall-USBKeyPresenceWatcher.ps1`
 
-Safely removes the watcher:
+Handles:
 
-- Terminates running watcher instances (VBS/PowerShell)
-- Removes the Scheduled Task
-- Wipes the installation directory
-- Supports `-WhatIf` testing
+- Killing watcher processes
+- Removing scheduled task
+- Cleaning directories
+- Supporting dry runs with `-WhatIf`
 
 ---
 
 ### `USBKeyPresenceLock.ps1`
 
-The main watcher daemon responsible for:
+The core watcher:
 
-- Detecting presence of the configured USB security key
-- Locking the workstation when the device is removed
-- Logging to Event Viewer or fall back log file
-- Displaying toast notifications via BurntToast
-- Ensuring only a single instance runs (mutex)
+- Polls for device
+- Enforces lock-on-missing
+- Logs events
+- Sends notifications
+- Prevents multiple instances
 
 ---
 
 ### `Launch-USBKeyPresenceWatcher.vbs`
 
-A VBS launcher that:
+Ensures the watcher runs:
 
-- Runs the watcher script **fully hidden**
-- Ensures execution occurs under the interactive user session
-- Prevents PowerShell console windows from appearing
+- Hidden
+- Under correct session
+- Without console windows
 
 ---
 
 ### `Template-USBKeyPresenceLock.xml`
 
-Task Scheduler XML template containing:
-
-- Script path
-- Working directory
-- User SID
-- Run conditions
+Defines triggers, actions, permissions, and runtime environment.
 
 ---
 
-### `lock_toast_64.png`
+# 🤖 GitHub Workflows
 
-Icon used in toast notifications via BurntToast.
-
----
-
-## 📄 Project Metadata
-
-### `CHANGELOG.md`
-
-The version history of the project.  
-Also used by GitHub Actions to generate release notes.
-
-### `README.md`
-
-User-facing documentation, setup instructions, and overview of the project.
-
-### `LICENSE` / `NOTICE`
-
-Legal files for distribution and attribution.
-
----
-
-## ⚙ Configuration
-
-### `.editorconfig`
-
-Enforces consistent formatting and encoding:
-
-- CRLF for PowerShell
-- ANSI for VBS
-- UTF-8 rules for other text files
-- Prevents editors from breaking encoding-sensitive scripts
-
----
-
-### `.gitattributes`
-
-Defines how Git handles:
-
-- Binary/text detection
-- Line-ending normalization
-- Encoding stability (especially for VBS)
-
----
-
-### `.gitignore`
-
-Specifies which local files and build artifacts should be excluded from version control.
-
-### `.prettierignore`
-
-Specifies which files Prettier must **not** format.
-
----
-
-## 🤖 GitHub Workflows (`.github/workflows/`)
-
-### `validate-powershell.yml`
-
-Runs PSScriptAnalyzer to ensure correct PowerShell formatting and syntax.
-
-### `validate-xml.yml`
-
-Ensures task XML files remain valid and well-formed.
-
-### `release.yml`
-
-Automatically generates GitHub Releases from tagged versions, pulling notes from `CHANGELOG.md`.
-
-### `auto-hotfix.yml`
-
-Automates creation of hotfix releases based on commit activity.
-
-### `auto-nightly.yml`
-
-Builds nightly development releases.
+- **validate-powershell.yml** — PSScriptAnalyzer checks
+- **validate-xml.yml** — XML structure + encoding checks
+- **release.yml** — Automated release generation
+- **auto-hotfix.yml** — Auto hotfix creation based on commit volume
+- **auto-nightly.yml** — Daily builds
+- **ci-validation.yml** — Repository-wide validation
 
 ---
 
 # 🚀 Installation
 
-## 1. Clone or download the project
+### 1. Download or clone
 
 ```powershell
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
+git clone https://github.com/EagleClarinet22/USBKeyPresenceWatcher.git
+cd USBKeyPresenceWatcher
 ```
 
----
-
-## 2. (Recommended) Allow local scripts to run
+### 2. Enable script execution
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
----
-
-## 3. Run the installer in Windows PowerShell (as Administrator)
-
-> Note: The installer will auto-elevate (UAC prompt) if required. You may run it normally from Windows PowerShell and it will handle elevation automatically.
+### 3. Run the installer
 
 ```powershell
 .\Install-USBKeyPresenceWatcher.ps1
 ```
 
-To see options:
+### 4. Select your USB device
 
-```powershell
-.\Install-USBKeyPresenceWatcher.ps1 -Help
-```
-
----
-
-## 4. Choose your USB device
-
-The installer lists every detected USB device containing a VID/PID.
-
-Then it:
-
-- Copies files into the install folder
-- Patches the installed script
-- Hardens ACLs
-- Creates the EventLog source
-- Generates `Task-USBKeyPresenceLock.xml`
-- Registers the scheduled task
+Installer will list all detectable USB devices and let you choose one.
 
 ---
 
 # 🔧 Configuration
 
-### Change which device is monitored
+### Re-select USB device
 
 ```powershell
-.\Install-YubiKeyPresenceWatcher.ps1 -Force
+.\Install-USBKeyPresenceWatcher.ps1 -Force
 ```
 
----
-
-### Hub-resilience tuning
-
-In the installed script:
+### Adjust hub-resilience threshold
 
 ```powershell
 $missingThreshold = 2
@@ -423,23 +321,23 @@ $missingThreshold = 2
 # ❓ FAQ
 
 <details>
-<summary><strong>Click to expand FAQ</strong></summary>
+<summary><strong>Expand FAQ</strong></summary>
 
-### Do I need my VID/PID?
+### Do I need VID/PID?
 
-No — the installer detects options automatically.
+No — the installer detects everything.
 
 ### Does this replace authentication?
 
-No — it only **locks** based on device presence.
+No — this adds presence-based locking only.
 
-### Does this work with Windows Hello PIN?
+### Does this work with Windows Hello?
 
 Yes.
 
-### Why Windows PowerShell instead of PowerShell 7+?
+### Why Windows PowerShell 5.1?
 
-BurntToast, PnP APIs, and hidden scheduled task execution require PS 5.1.
+Required for PnP APIs, BurntToast, and hidden scheduled-task execution.
 
 </details>
 
@@ -447,7 +345,7 @@ BurntToast, PnP APIs, and hidden scheduled task execution require PS 5.1.
 
 # 🛠 Troubleshooting
 
-### No toast notifications
+### No toast notifications?
 
 Install BurntToast:
 
@@ -457,14 +355,12 @@ Install-Module BurntToast -Scope CurrentUser
 
 Ensure:
 
-- Task runs as the logged-in user
-- “Run only when user is logged on” is enabled
+- Task runs as logged-in user
+- "Run only when user is logged on" is enabled
 
 ---
 
 # 🧹 Uninstallation
-
-### Recommended
 
 ```powershell
 .\Uninstall-USBKeyPresenceWatcher.ps1
@@ -472,37 +368,33 @@ Ensure:
 
 Supports:
 
-- Auto-elevation
+- Instance cleanup
 - Task removal
-- Directory cleanup
+- Directory deletion
 - `-WhatIf`
 
 ---
 
 # 🤝 Contributing
 
-Pull requests are welcome!  
-If reporting issues, please include:
+Contributions are welcome!
 
-- Windows version
-- Device VID/PID
-- Events from Event Viewer
+Use structured issue templates for:
+
+- Bug reports
+- Feature requests
+- Workflow failures
+- UX improvements
+- Documentation updates
+
+For general questions or support, start a Discussion:  
+https://github.com/EagleClarinet22/USBKeyPresenceWatcher/discussions
 
 ---
 
-## License
+# 📜 License
 
-This project is licensed under the [MIT License](./LICENSE).
-
-## Attribution
-
-If you use this project, or substantial portions of its scripts, in your own
-work, attribution to the original author is appreciated:
-
-- Author: **EagleClarinet22 (Connor Anderson)**
-- Please retain the [NOTICE](./NOTICE) file where practical.
-
-Attribution is not required by the license, but it is encouraged.
+MIT License. Attribution appreciated but not required.
 
 ---
 
