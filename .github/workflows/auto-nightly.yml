@@ -58,6 +58,9 @@ jobs:
 
             Commit: `${{ steps.commitinfo.outputs.sha }}`
             Date: `${{ steps.commitinfo.outputs.date }}`
+          draft: false
+          prerelease: true
+          make_latest: false
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
