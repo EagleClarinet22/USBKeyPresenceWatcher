@@ -78,6 +78,8 @@ jobs:
           body: |
             Automatic hotfix release.
             **Commits since last release:** ${{ steps.commitcount.outputs.count }}
-
+          draft: false
+          prerelease: true
+          make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
