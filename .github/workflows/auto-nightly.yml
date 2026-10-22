@@ -1,9 +1,12 @@
 name: Nightly Auto Release
 
+# Project is winding down: the nightly schedule is disabled.
+# This workflow can still be run manually from the Actions tab.
+# To re-enable nightly builds, restore:
+#   schedule:
+#     - cron: "0 1 * * *"
 on:
-  schedule:
-    # Runs every night at 1:00 AM UTC — adjust as needed
-    - cron: "0 1 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
