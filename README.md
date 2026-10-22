@@ -269,8 +269,8 @@ Defines triggers, actions, permissions, and runtime environment.
 - **validate-powershell.yml** — PSScriptAnalyzer checks
 - **validate-xml.yml** — XML structure + encoding checks
 - **release.yml** — Automated release generation
-- **auto-hotfix.yml** — Auto hotfix creation based on commit volume
-- **auto-nightly.yml** — Daily builds
+- **auto-hotfix.yml** — Auto hotfix creation based on commit volume *(disabled — manual run only)*
+- **auto-nightly.yml** — Daily builds *(disabled — manual run only)*
 - **ci-validation.yml** — Repository-wide validation
 
 ---

@@ -1,9 +1,13 @@
 name: Auto Hotfix Release
 
+# Project is winding down: automatic hotfix releases on push to main are disabled.
+# This workflow can still be run manually from the Actions tab.
+# To re-enable, restore:
+#   push:
+#     branches:
+#       - main
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
